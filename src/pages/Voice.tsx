@@ -86,46 +86,6 @@ const Voice = () => {
     { id: 'browser-native', name: 'Browser Voice', description: '浏览器内置', color: stringToColor('browser-native'), gender: 'neutral' }, // Changed name
   ];
 
-  const voiceOptions: VoiceOption[] = baseVoiceOptions.map(voice => {
-    // Generate NFT-style avatar URL using dicebear.com
-    const seed = voice.name.replace(/\s/g, ''); // Use voice name as seed
-    const avatarType = 'avataaars'; // Changed to avataaars for more human-like avatars
-    const avatarColor = voice.color.substring(1); // Remove #
-    
-    // Enhanced parameters for more diverse and human-like avatars
-    const topTypes = ['NoHair', 'Eyepatch', 'Hat', 'Hijab', 'Turban', 'WinterHat1', 'WinterHat2', 'WinterHat3', 'WinterHat4', 'LongHairBigHair', 'LongHairBob', 'LongHairBun', 'LongHairCurly', 'LongHairCurvy', 'LongHairDreads', 'LongHairFrida', 'LongHairFro', 'LongHairFroBand', 'LongHairNotTooLong', 'LongHairShavedSides', 'LongHairMiaWallace', 'LongHairStraight', 'LongHairStraight2', 'LongHairStraightStrand', 'ShortHairDreads', 'ShortHairFrizzle', 'ShortHairShaggyMullet', 'ShortHairShortCurly', 'ShortHairShortFlat', 'ShortHairShortRound', 'ShortHairShortWaved', 'ShortHairSides', 'ShortHairTheCaesar', 'ShortHairTheCaesarAndFringe'];
-    const accessoriesTypes = ['Blank', 'Kurt', 'Prescription01', 'Prescription02', 'Round', 'Sunglasses', 'Wayfarers'];
-    const facialHairTypes = ['Blank', 'BeardMedium', 'BeardLight', 'BeardMajestic', 'MoustacheFancy', 'MoustacheMagnum'];
-    const clotheTypes = ['BlazerShirt', 'BlazerSweater', 'CollarSweater', 'GraphicShirt', 'Hoodie', 'Overall', 'ShirtCrewNeck', 'ShirtScoopNeck', 'ShirtVNeck'];
-    const eyeTypes = ['Close', 'Cry', 'Default', 'Dizzy', 'EyeRoll', 'Happy', 'Hearts', 'Side', 'Squint', 'Surprised', 'Wink', 'WinkWacky'];
-    const eyebrowTypes = ['Angry', 'AngryNatural', 'Default', 'DefaultNatural', 'FlatNatural', 'FrownNatural', 'RaisedExcited', 'RaisedExcitedNatural', 'SadConcerned', 'SadConcernedNatural', 'UnibrowNatural', 'Updown', 'UpdownNatural'];
-    const mouthTypes = ['Concerned', 'Default', 'Disbelief', 'Eating', 'Grimace', 'Sad', 'ScreamOpen', 'Serious', 'Smile', 'Tongue', 'Twinkle', 'Vomit'];
-    const skinColors = ['Tanned', 'Yellow', 'Pale', 'Light', 'Brown', 'DarkBrown', 'Black'];
-
-    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-
-    let avatarParams = '';
-    if (voice.gender === 'male') {
-      avatarParams += `&topType=${getRandom(topTypes)}&accessoriesType=${getRandom(accessoriesTypes)}&facialHairType=${getRandom(facialHairTypes)}&clotheType=${getRandom(clotheTypes)}&eyeType=${getRandom(eyeTypes)}&eyebrowType=${getRandom(eyebrowTypes)}&mouthType=${getRandom(mouthTypes)}&skinColor=${getRandom(skinColors)}`;
-    } else if (voice.gender === 'female') {
-      avatarParams += `&topType=${getRandom(topTypes)}&accessoriesType=${getRandom(accessoriesTypes)}&clotheType=${getRandom(clotheTypes)}&eyeType=${getRandom(eyeTypes)}&eyebrowType=${getRandom(eyebrowTypes)}&mouthType=${getRandom(mouthTypes)}&skinColor=${getRandom(skinColors)}`;
-    } else { // Neutral or unknown gender
-      avatarParams += `&topType=${getRandom(topTypes)}&accessoriesType=${getRandom(accessoriesTypes)}&facialHairType=${getRandom(facialHairTypes)}&clotheType=${getRandom(clotheTypes)}&eyeType=${getRandom(eyeTypes)}&eyebrowType=${getRandom(eyebrowTypes)}&mouthType=${getRandom(mouthTypes)}&skinColor=${getRandom(skinColors)}`;
-    }
-    
-    // Explicitly construct the object to ensure types are preserved
-    const newVoice: VoiceOption = {
-      id: voice.id,
-      name: voice.name,
-      description: voice.description,
-      color: voice.color,
-      // Conditionally add gender to preserve its literal type if it exists
-      ...(voice.gender && { gender: voice.gender }), 
-      avatarUrl: `https://api.dicebear.com/7.x/${avatarType}/svg?seed=${seed}&backgroundColor=${avatarColor}${avatarParams}`
-    };
-    return newVoice;
-  });
-
   // A selection of icons to cycle through for voice options (fallback if avatar fails)
   const voiceIcons = [
     User, Mic, Speaker, Feather, Smile, Sparkles, Music, Heart, Star, Sun, Cloud, Gift, Bell, Camera, Film, BookText, Volume2
@@ -219,38 +179,13 @@ const Voice = () => {
       } else {
         // Use Pollinations.ai API
         if (readingMode === 'interpretive') {
-            // Step 1: Call an LLM to rephrase the text
+            // For interpretive mode, add a stylistic prompt to the original text
+            finalPromptForAudio = `请以生动、富有表现力的风格朗读以下文本：${text}`;
             toast({
-                title: "正在智能演绎文本...",
+                title: "正在尝试以演绎风格合成语音...",
                 description: "这可能需要一些时间，请稍候。",
                 variant: "info"
             });
-            const rephrasePrompt = `请将以下文本转换为自媒体口播风格，使其更生动、吸引人，不要以对话形式回复，直接给出转换后的文本：${text}`;
-            const rephraseUrl = `https://text.pollinations.ai/${encodeURIComponent(rephrasePrompt)}?model=openai&nologo=true`; // Using a general LLM model
-
-            try {
-              const rephraseResponse = await fetch(rephraseUrl);
-              if (!rephraseResponse.ok) {
-                  const errorBody = await rephraseResponse.text();
-                  throw new Error(`文本演绎API错误: ${rephraseResponse.status} - ${errorBody}`);
-              }
-              const rephrasedText = await rephraseResponse.text();
-              finalPromptForAudio = rephrasedText.trim();
-
-              toast({
-                  title: "文本已智能演绎",
-                  description: "正在将演绎后的文本转换为语音...",
-                  variant: "default"
-              });
-            } catch (rephraseError: any) {
-              console.error("文本演绎失败:", rephraseError);
-              toast({
-                title: "智能演绎失败",
-                description: `文本改写服务出现问题，已使用原文合成语音。错误: ${rephraseError.message}`,
-                variant: "warning"
-              });
-              finalPromptForAudio = `请朗读以下文本：${text}`; // Fallback to original text
-            }
         } else { // strict mode
             finalPromptForAudio = `请朗读以下文本：${text}`; // Explicitly ask to read
         }
@@ -354,7 +289,7 @@ const Voice = () => {
                       onValueChange={setSelectedVoice}
                       className="grid grid-cols-5 gap-3"
                     >
-                      {voiceOptions.map((voice, index) => {
+                      {baseVoiceOptions.map((voice, index) => { // Use baseVoiceOptions to avoid avatarUrl generation
                         const VoiceIcon = getVoiceIcon(index);
                         return (
                           <div
@@ -383,31 +318,8 @@ const Voice = () => {
                                 className="w-8 h-8 rounded-full flex items-center justify-center mb-1 relative overflow-hidden"
                                 style={{ backgroundColor: voice.color }}
                               >
-                                {voice.avatarUrl ? (
-                                  <img 
-                                    src={voice.avatarUrl} 
-                                    alt={voice.name} 
-                                    className="w-full h-full object-cover absolute inset-0" 
-                                    onError={(e) => { 
-                                      const target = e.target as HTMLImageElement;
-                                      target.style.display = 'none'; // Hide the broken image
-                                      const iconElement = target.nextElementSibling as HTMLElement;
-                                      if (iconElement) iconElement.style.display = 'flex'; // Show icon
-                                    }}
-                                    onLoad={(e) => {
-                                      const target = e.target as HTMLImageElement;
-                                      target.style.display = 'block'; // Ensure image is visible
-                                      const iconElement = target.nextElementSibling as HTMLElement;
-                                      if (iconElement) iconElement.style.display = 'none'; // Hide icon
-                                    }}
-                                  />
-                                ) : null}
-                                <div 
-                                  className="w-full h-full flex items-center justify-center"
-                                  style={{ display: voice.avatarUrl ? 'none' : 'flex' }} // Initially hide if avatarUrl exists
-                                >
-                                  <VoiceIcon className="h-4 w-4 text-white" />
-                                </div>
+                                {/* Always display Lucide icon */}
+                                <VoiceIcon className="h-4 w-4 text-white" />
                               </div>
                               <div className="text-white font-medium text-xs">{voice.name}</div>
                               <div className="text-gray-400 text-xs">{voice.description}</div>
@@ -447,7 +359,7 @@ const Voice = () => {
                       </Button>
                     </div>
                     <p className="text-gray-400 text-xs mt-2 text-center">
-                      {readingMode === 'strict' ? '严格按照输入文本朗读' : '转换为自媒体口播风格'}
+                      {readingMode === 'strict' ? '严格按照输入文本朗读' : '尝试以更生动的方式朗读'}
                     </p>
                   </div>
 
@@ -457,7 +369,7 @@ const Voice = () => {
                       id="text-input"
                       value={text}
                       onChange={(e) => setText(e.target.value)}
-                      placeholder="在这里输入您的文本..." // Changed placeholder
+                      placeholder="在这里输入您的文本..." // Consistent placeholder
                       className="min-h-[180px] bg-[#0f1419] border-[#203042]/60 text-white placeholder-gray-500 focus:border-cyan-400 text-base"
                     />
                     <div className="flex justify-between items-center mt-3">
@@ -505,17 +417,17 @@ const Voice = () => {
                           <div 
                             className="w-10 h-10 rounded-full flex items-center justify-center mr-4"
                             style={{ 
-                              backgroundColor: voiceOptions.find(v => v.id === selectedVoice)?.color || '#8B5CF6' 
+                              backgroundColor: baseVoiceOptions.find(v => v.id === selectedVoice)?.color || '#8B5CF6' 
                             }}
                           >
                             <Volume2 className="h-5 w-5 text-white" />
                           </div>
                           <div>
                             <div className="text-white font-medium text-base">
-                              {voiceOptions.find(v => v.id === selectedVoice)?.name || 'Voice'}
+                              {baseVoiceOptions.find(v => v.id === selectedVoice)?.name || 'Voice'}
                             </div>
                             <div className="text-gray-400 text-sm">
-                              {voiceOptions.find(v => v.id === selectedVoice)?.description}
+                              {baseVoiceOptions.find(v => v.id === selectedVoice)?.description}
                             </div>
                           </div>
                         </div>
@@ -590,7 +502,7 @@ const Voice = () => {
                             <div className="flex items-center">
                               <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3"></div>
                               <span className="text-cyan-400 font-medium text-sm">
-                                {voiceOptions.find(v => v.id === item.voice)?.name || item.voice}
+                                {baseVoiceOptions.find(v => v.id === item.voice)?.name || item.voice}
                               </span>
                               <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium"
                                 style={{ 
