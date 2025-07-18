@@ -41,13 +41,13 @@ const Chat = () => {
     { id: "phi", name: "Phi-4 Multimodal Instruct", group: "Microsoft", apiProvider: "pollinations" },
     { id: "qwen-coder", name: "Qwen 2.5 Coder 32B", group: "Qwen", apiProvider: "pollinations" },
     // OpenRouter models (Free tier models as of user's request)
-    { id: "google/gemma-3n-e4b-it:free", name: "Gemma 3n 4B (Free)", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "qwen/qwen3-235b-a22b:free", name: "Qwen 3 235B (Free)", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "deepseek/deepseek-r1:free", name: "DeepSeek R1 (Free)", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "deepseek/deepseek-chat-v3-0324:free", name: "DeepSeek v3 (Free)", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "agentica-org/deepcoder-14b-preview:free", name: "DeepCoder 14B (Free)", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "meta-llama/llama-4-maverick:free", name: "Llama 4 Maverick (Free)", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "moonshotai/kimi-dev-72b:free", name: "Kimi Dev 72B (Free)", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "google/gemma-3n-e4b-it:free", name: "Gemma 3n 4B", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "qwen/qwen3-235b-a22b:free", name: "Qwen 3 235B", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "deepseek/deepseek-r1:free", name: "DeepSeek R1", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "deepseek/deepseek-chat-v3-0324:free", name: "DeepSeek v3", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "agentica-org/deepcoder-14b-preview:free", name: "DeepCoder 14B", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "meta-llama/llama-4-maverick:free", name: "Llama 4 Maverick", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "moonshotai/kimi-dev-72b:free", name: "Kimi Dev 72B", group: "OpenRouter", apiProvider: "openrouter" },
   ];
 
   // AI智能体列表
@@ -216,7 +216,7 @@ const Chat = () => {
 先分析用户需求：**${topic || '用户输入的主题'}** 关联的TOP3高互动场景是：
 1. **情绪价值：** 激发用户情感共鸣，如分享个人成长、克服困难的经历，或展示美好生活瞬间。
 2. **实用价值：** 提供具体、可操作的解决方案或教程，如美妆教程、穿搭技巧、美食食谱、学习方法等。
-3. **娱乐价值：** 创造轻松愉快的氛围，如搞笑段子、萌宠日常、旅行vlog、趣味挑战等。
+3. **娱乐价值：：** 创造轻松愉快的氛围，如搞笑段子、萌宠日常、旅行vlog、趣味挑战等。
 
 **文案生成（含3套变体）**
 
@@ -265,7 +265,7 @@ const Chat = () => {
 [正文]
 别再羡慕别人了！我一个普通人，只用了30天，就在小红书实现了月入过万！今天把我的秘诀毫无保留地分享给你！
 1. **收益可视化：** “上个月我的小红书收益截图，真实数据，不P图！”
-2. **素人可复制：** “我不是什么大V，普通人也能轻松上手，跟着我做就行！”
+2. **素人可复制：：** “我不是什么大V，普通人也能轻松上手，跟着我做就行！”
 3. **步骤拆解：** “第一步：定位你的赛道；第二步：打造爆款内容；第三步：高效引流变现！”
 4. **资源包钩子：** “评论区留言‘变现’，免费送你我的小红书变现秘籍资料包！”
 [配图]
