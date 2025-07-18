@@ -83,7 +83,7 @@ const Voice = () => {
     { id: 'elan', name: 'Elan', description: '优雅流利', color: stringToColor('elan'), gender: 'female' },
     { id: 'marilyn', name: 'Marilyn', description: '甜美悦耳', color: stringToColor('marilyn'), gender: 'female' },
     { id: 'meadow', name: 'Meadow', description: '清新宁静', color: stringToColor('meadow'), gender: 'female' },
-    { id: 'browser-native', name: 'Browser Voice', description: '浏览器内置', color: stringToColor('browser-native'), gender: 'neutral' }, // Changed name
+    { id: 'browser-native', name: 'System Voice', description: '系统内置语音', color: stringToColor('browser-native'), gender: 'neutral' }, // Changed name and description
   ];
 
   const voiceOptions: VoiceOption[] = baseVoiceOptions.map((voice, index) => {
@@ -91,36 +91,11 @@ const Voice = () => {
     const avatarType = 'avataaars';
     const avatarColor = voice.color.substring(1);
 
-    // Define a more focused set of human-like features for avataaars
-    const topTypes = ['LongHairBigHair', 'LongHairBob', 'LongHairBun', 'LongHairCurly', 'LongHairCurvy', 'LongHairDreads', 'LongHairFro', 'LongHairNotTooLong', 'LongHairStraight', 'LongHairStraight2', 'LongHairStraightStrand', 'ShortHairDreads', 'ShortHairFrizzle', 'ShortHairShaggyMullet', 'ShortHairShortCurly', 'ShortHairShortFlat', 'ShortHairShortRound', 'ShortHairShortWaved', 'ShortHairSides', 'ShortHairTheCaesar', 'ShortHairTheCaesarAndFringe'];
-    const accessoriesTypes = ['Blank', 'Prescription01', 'Prescription02', 'Round', 'Sunglasses', 'Wayfarers']; // Include 'Blank' for no accessories
-    const facialHairTypes = ['Blank', 'BeardMedium', 'BeardLight', 'BeardMajestic', 'MoustacheFancy', 'MoustacheMagnum'];
-    const clotheTypes = ['BlazerShirt', 'BlazerSweater', 'CollarSweater', 'GraphicShirt', 'Hoodie', 'Overall', 'ShirtCrewNeck', 'ShirtScoopNeck', 'ShirtVNeck'];
-    const eyeTypes = ['Default', 'Happy', 'Side', 'Squint', 'Wink', 'WinkWacky'];
-    const eyebrowTypes = ['Default', 'DefaultNatural', 'RaisedExcited', 'RaisedExcitedNatural', 'SadConcerned', 'SadConcernedNatural', 'Updown', 'UpdownNatural'];
-    const mouthTypes = ['Default', 'Smile', 'Eating', 'Grimace', 'Serious', 'Tongue', 'Twinkle'];
-    const skinColors = ['Tanned', 'Yellow', 'Pale', 'Light', 'Brown', 'DarkBrown', 'Black'];
-    const hairColors = ['Auburn', 'Black', 'Blonde', 'BlondeGolden', 'Brown', 'BrownDark', 'PastelPink', 'Platinum', 'Red', 'SilverGray'];
-    const facialHairColors = ['Auburn', 'Black', 'Blonde', 'BlondeGolden', 'Brown', 'BrownDark', 'Platinum', 'Red', 'SilverGray'];
+    // Simplified avatarParams to ensure basic human-like avatars
+    // Removed all specific topTypes, accessoriesTypes, facialHairTypes, etc.
+    // Relying on dicebear's default randomness for avataaars
+    const avatarParams = ''; // No extra parameters
 
-    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-
-    let avatarParams = '';
-    // Always include a topType (hair) for a more human look
-    avatarParams += `&topType=${getRandom(topTypes)}`;
-    // Randomly include accessories or leave blank
-    if (Math.random() > 0.5) avatarParams += `&accessoriesType=${getRandom(accessoriesTypes)}`;
-    
-    if (voice.gender === 'male') {
-      avatarParams += `&facialHairType=${getRandom(facialHairTypes)}&facialHairColor=${getRandom(facialHairColors)}`;
-    } else if (voice.gender === 'female') {
-      // No specific facial hair for female, but other parameters apply
-    } else { // Neutral, can have some facial hair
-      if (Math.random() > 0.7) avatarParams += `&facialHairType=${getRandom(facialHairTypes)}&facialHairColor=${getRandom(facialHairColors)}`;
-    }
-    
-    avatarParams += `&clotheType=${getRandom(clotheTypes)}&eyeType=${getRandom(eyeTypes)}&eyebrowType=${getRandom(eyebrowTypes)}&mouthType=${getRandom(mouthTypes)}&skinColor=${getRandom(skinColors)}&hairColor=${getRandom(hairColors)}`;
-    
     const newVoice: VoiceOption = {
       id: voice.id,
       name: voice.name,
