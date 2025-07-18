@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -6,10 +5,12 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
+import { useToast } from "@/components/ui/use-toast"; // Import useToast
 
 const Register = () => {
   const { register, loading } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast(); // Initialize useToast
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -27,8 +28,20 @@ const Register = () => {
     
     setPasswordError('');
     
-    if (await register(name, email, password)) {
+    try {
+      await register(name, email, password); // Pass name as the first argument
+      toast({
+        title: "注册成功",
+        description: "欢迎加入Nexus AI！",
+        variant: "default"
+      });
       navigate('/');
+    } catch (error: any) {
+      toast({
+        title: "注册失败",
+        description: error.message || "注册过程中出现错误，请重试",
+        variant: "destructive"
+      });
     }
   };
   

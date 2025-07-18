@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -6,18 +5,32 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
+import { useToast } from "@/components/ui/use-toast"; // Import useToast
 
 const Login = () => {
   const { login, loading } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast(); // Initialize useToast
   
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (await login(account, password)) {
+    try {
+      await login(account, password);
+      toast({
+        title: "登录成功",
+        description: "欢迎回来！",
+        variant: "default"
+      });
       navigate('/');
+    } catch (error: any) {
+      toast({
+        title: "登录失败",
+        description: error.message || "请检查您的账号和密码",
+        variant: "destructive"
+      });
     }
   };
   
