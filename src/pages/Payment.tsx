@@ -1,70 +1,135 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast"; // Updated import
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/components/Navigation';
-import { CheckCircle, Crown, Sparkles, Star, Zap, Users, X } from 'lucide-react';
+import { CheckCircle, Crown, Sparkles, Star, Zap, Users, X, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client'; // Import supabase client
+import { Database } from '@/integrations/supabase/types';
+
+// Define a type for membership plans fetched from the database
+type MembershipPlan = Database['public']['Tables']['membership_plans']['Row'];
+
+interface PlanDetail extends MembershipPlan {
+  period: string; // Add period for display
+}
 
 const Payment = () => {
-  const { user } = useAuth();
+  const { user, isAuthenticated, checkPaymentStatus } = useAuth();
   const { toast } = useToast();
-  const [selectedPlan, setSelectedPlan] = useState<'annual' | 'lifetime' | 'agent'>('annual');
+  const navigate = useNavigate();
+  const [selectedPlanType, setSelectedPlanType] = useState<'annual' | 'lifetime' | 'agent'>('annual');
   const [showPayment, setShowPayment] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [plans, setPlans] = useState<Record<string, PlanDetail>>({}); // State to store fetched plans
 
-  const planDetails = {
-    annual: { 
-      price: '99', 
-      period: '/年', 
-      total: '99',
-      description: '年会员套餐',
-      subtitle: '高性价比之选',
-      features: [
-        '20+顶尖AI大模型，无限次对话',
-        'Flux全家桶，无限次图像生成',
-        '无限次语音合成',
-        '所有功能一年内免费使用',
-        '专属会员身份标识'
-      ]
-    },
-    lifetime: { 
-      price: '399', 
-      period: '/永久', 
-      total: '399',
-      description: '永久会员套餐',
-      subtitle: '一次付费，终身享用',
-      features: [
-        '包含所有年会员功能',
-        '永久免费使用所有AI功能',
-        '专属VIP身份标识',
-        '无限制访问新功能',
-        '永久免费功能更新'
-      ]
-    },
-    agent: { 
-      price: '1999', 
-      period: '/代理', 
-      total: '1999',
-      description: '代理商套餐',
-      subtitle: '创业合作首选',
-      features: [
-        '包含所有永久会员功能',
-        '30%推广收益分成',
-        '专属代理商后台',
-        '营销素材支持',
-        '自动分成系统'
-      ]
+  useEffect(() => {
+    const fetchMembershipPlans = async () => {
+      const { data, error } = await supabase
+        .from('membership_plans')
+        .select('*')
+        .eq('is_active', true);
+
+      if (error) {
+        console.error('Error fetching membership plans:', error);
+        toast({
+          title: "加载会员计划失败",
+          description: "无法获取会员套餐信息",
+          variant: "destructive"
+        });
+      } else {
+        const fetchedPlans: Record<string, PlanDetail> = {};
+        data.forEach(plan => {
+          fetchedPlans[plan.type] = {
+            ...plan,
+            price: plan.price, // Ensure price is numeric
+            period: plan.type === 'annual' ? '/年' : (plan.type === 'lifetime' ? '/永久' : '/代理'),
+          };
+        });
+        setPlans(fetchedPlans);
+      }
+    };
+
+    fetchMembershipPlans();
+  }, []);
+
+  const handlePurchase = async (planType: 'annual' | 'lifetime' | 'agent') => {
+    if (!isAuthenticated || !user) {
+      toast({
+        title: "请先登录",
+        description: "购买会员需要登录账户",
+        variant: "destructive"
+      });
+      navigate('/login');
+      return;
     }
-  };
 
-  const handlePurchase = (plan: 'annual' | 'lifetime' | 'agent') => {
-    setSelectedPlan(plan);
-    setShowPayment(true);
+    const selectedPlan = plans[planType];
+    if (!selectedPlan) {
+      toast({
+        title: "错误",
+        description: "未找到选定的会员计划",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setSelectedPlanType(planType);
+    setPaymentLoading(true);
+    setQrCodeUrl(null);
+
+    try {
+      // Call the new Edge Function to create an Alipay order
+      const { data, error } = await supabase.functions.invoke('create-alipay-order', {
+        body: {
+          user_id: user.id,
+          plan_id: selectedPlan.id, // Use the actual plan ID from the database
+          amount: selectedPlan.price,
+          subject: selectedPlan.name,
+          return_url: window.location.origin + '/payment-success', // Example return URL
+          notify_url: window.location.origin + '/api/alipay-notify', // This needs a real webhook endpoint
+        }
+      });
+
+      if (error) throw error;
+
+      setQrCodeUrl(data.qr_code_url);
+      setShowPayment(true);
+      toast({
+        title: "支付订单已创建",
+        description: "请扫描二维码完成支付",
+      });
+
+    } catch (error: any) {
+      console.error('Error creating Alipay order:', error);
+      toast({
+        title: "支付失败",
+        description: error.message || "创建支付订单时发生错误，请稍后再试",
+        variant: "destructive"
+      });
+    } finally {
+      setPaymentLoading(false);
+    }
   };
 
   const handleClosePayment = () => {
     setShowPayment(false);
+    setQrCodeUrl(null);
   };
+
+  // Ensure plans are loaded before rendering
+  if (Object.keys(plans).length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0a0f1c] via-[#1a1f2e] to-[#0f1419] flex items-center justify-center">
+        <Loader2 className="h-12 w-12 text-cyan-400 animate-spin" />
+        <div className="text-white ml-4">加载会员计划中...</div>
+      </div>
+    );
+  }
+
+  const currentPlanDetails = plans[selectedPlanType];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0f1c] via-[#1a1f2e] to-[#0f1419]">
@@ -94,141 +159,150 @@ const Payment = () => {
       <div className="max-w-7xl mx-auto px-4 pb-16">
         <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {/* Annual Plan */}
-          <div className="relative group cursor-pointer transition-all duration-300 hover:scale-102">
-            <div className="relative bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-gray-700 hover:border-cyan-400/50 rounded-3xl p-6 transition-all duration-300">
-              <div className="text-center mb-6">
-                <div className="flex items-center justify-center mb-4">
-                  <Crown className="w-5 h-5 text-cyan-400 mr-2" />
-                  <h3 className="text-lg font-bold text-white">{planDetails.annual.description}</h3>
-                </div>
-                <p className="text-gray-400 mb-4 text-sm">{planDetails.annual.subtitle}</p>
-                
-                <div className="mb-4">
-                  <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                    ¥{planDetails.annual.price}
-                  </span>
-                  <span className="text-gray-400 text-sm ml-2">/年</span>
-                </div>
-                
-                <div className="text-xs text-gray-500 mb-4">
-                  平均每月仅需 ¥8.25
-                </div>
-              </div>
-              
-              <div className="space-y-3 mb-6">
-                {planDetails.annual.features.map((feature, index) => (
-                  <div key={index} className="flex items-center">
-                    <CheckCircle className="w-4 h-4 text-cyan-400 mr-2 flex-shrink-0" />
-                    <span className="text-gray-300 text-sm">{feature}</span>
+          {plans.annual && (
+            <div className="relative group cursor-pointer transition-all duration-300 hover:scale-102">
+              <div className="relative bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-gray-700 hover:border-cyan-400/50 rounded-3xl p-6 transition-all duration-300">
+                <div className="text-center mb-6">
+                  <div className="flex items-center justify-center mb-4">
+                    <Crown className="w-5 h-5 text-cyan-400 mr-2" />
+                    <h3 className="text-lg font-bold text-white">{plans.annual.name}</h3>
                   </div>
-                ))}
-              </div>
-              
-              <div className="text-center">
-                <Button 
-                  onClick={() => handlePurchase('annual')}
-                  className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-3 rounded-xl text-sm transition-all duration-300"
-                >
-                  <Zap className="w-4 h-4 mr-2" />
-                  立即购买
-                </Button>
+                  <p className="text-gray-400 mb-4 text-sm">{plans.annual.description}</p>
+                  
+                  <div className="mb-4">
+                    <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+                      ¥{plans.annual.price}
+                    </span>
+                    <span className="text-gray-400 text-sm ml-2">{plans.annual.period}</span>
+                  </div>
+                  
+                  <div className="text-xs text-gray-500 mb-4">
+                    平均每月仅需 ¥8.25
+                  </div>
+                </div>
+                
+                <div className="space-y-3 mb-6">
+                  {Array.isArray(plans.annual.features) && (plans.annual.features as string[]).map((feature, index) => (
+                    <div key={index} className="flex items-center">
+                      <CheckCircle className="w-4 h-4 text-cyan-400 mr-2 flex-shrink-0" />
+                      <span className="text-gray-300 text-sm">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="text-center">
+                  <Button 
+                    onClick={() => handlePurchase('annual')}
+                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold py-3 rounded-xl text-sm transition-all duration-300"
+                    disabled={paymentLoading}
+                  >
+                    {paymentLoading && selectedPlanType === 'annual' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
+                    立即购买
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Lifetime Plan */}
-          <div className="relative group cursor-pointer transition-all duration-300 hover:scale-102">
-            {/* Recommended Badge */}
-            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 z-10">
-              <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-1 rounded-full text-xs font-bold flex items-center shadow-lg">
-                <Sparkles className="w-3 h-3 mr-1" />
-                推荐
-              </div>
-            </div>
-            
-            <div className="relative bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-purple-400 rounded-3xl p-6 transition-all duration-300 shadow-2xl shadow-purple-500/25">
-              <div className="text-center mb-6">
-                <div className="flex items-center justify-center mb-4">
-                  <Crown className="w-5 h-5 text-purple-400 mr-2" />
-                  <h3 className="text-lg font-bold text-white">{planDetails.lifetime.description}</h3>
-                </div>
-                <p className="text-gray-400 mb-4 text-sm">{planDetails.lifetime.subtitle}</p>
-                
-                <div className="mb-4">
-                  <span className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
-                    ¥{planDetails.lifetime.price}
-                  </span>
-                  <span className="text-gray-400 text-sm ml-2">/永久</span>
-                </div>
-                
-                <div className="text-xs text-gray-500 mb-4">
-                  相当于4年年费，超值划算
+          {plans.lifetime && (
+            <div className="relative group cursor-pointer transition-all duration-300 hover:scale-102">
+              {/* Recommended Badge */}
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 z-10">
+                <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-1 rounded-full text-xs font-bold flex items-center shadow-lg">
+                  <Sparkles className="w-3 h-3 mr-1" />
+                  推荐
                 </div>
               </div>
               
-              <div className="space-y-3 mb-6">
-                {planDetails.lifetime.features.map((feature, index) => (
-                  <div key={index} className="flex items-center">
-                    <CheckCircle className="w-4 h-4 text-purple-400 mr-2 flex-shrink-0" />
-                    <span className="text-gray-300 text-sm">{feature}</span>
+              <div className="relative bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-purple-400 rounded-3xl p-6 transition-all duration-300 shadow-2xl shadow-purple-500/25">
+                <div className="text-center mb-6">
+                  <div className="flex items-center justify-center mb-4">
+                    <Crown className="w-5 h-5 text-purple-400 mr-2" />
+                    <h3 className="text-lg font-bold text-white">{plans.lifetime.name}</h3>
                   </div>
-                ))}
-              </div>
-              
-              <div className="text-center">
-                <Button 
-                  onClick={() => handlePurchase('lifetime')}
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white font-bold py-3 rounded-xl text-sm transition-all duration-300"
-                >
-                  <Zap className="w-4 h-4 mr-2" />
-                  立即购买
-                </Button>
+                  <p className="text-gray-400 mb-4 text-sm">{plans.lifetime.description}</p>
+                  
+                  <div className="mb-4">
+                    <span className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
+                      ¥{plans.lifetime.price}
+                    </span>
+                    <span className="text-gray-400 text-sm ml-2">{plans.lifetime.period}</span>
+                  </div>
+                  
+                  <div className="text-xs text-gray-500 mb-4">
+                    相当于4年年费，超值划算
+                  </div>
+                </div>
+                
+                <div className="space-y-3 mb-6">
+                  {Array.isArray(plans.lifetime.features) && (plans.lifetime.features as string[]).map((feature, index) => (
+                    <div key={index} className="flex items-center">
+                      <CheckCircle className="w-4 h-4 text-purple-400 mr-2 flex-shrink-0" />
+                      <span className="text-gray-300 text-sm">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="text-center">
+                  <Button 
+                    onClick={() => handlePurchase('lifetime')}
+                    className="w-full bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white font-bold py-3 rounded-xl text-sm transition-all duration-300"
+                    disabled={paymentLoading}
+                  >
+                    {paymentLoading && selectedPlanType === 'lifetime' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
+                    立即购买
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Agent Plan */}
-          <div className="relative group cursor-pointer transition-all duration-300 hover:scale-102">
-            <div className="relative bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-gray-700 hover:border-orange-400/50 rounded-3xl p-6 transition-all duration-300">
-              <div className="text-center mb-6">
-                <div className="flex items-center justify-center mb-4">
-                  <Users className="w-5 h-5 text-orange-400 mr-2" />
-                  <h3 className="text-lg font-bold text-white">{planDetails.agent.description}</h3>
-                </div>
-                <p className="text-gray-400 mb-4 text-sm">{planDetails.agent.subtitle}</p>
-                
-                <div className="mb-4">
-                  <span className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
-                    ¥{planDetails.agent.price}
-                  </span>
-                  <span className="text-gray-400 text-sm ml-2">/代理</span>
-                </div>
-                
-                <div className="text-xs text-gray-500 mb-4">
-                  推广3-4单即可回本
-                </div>
-              </div>
-              
-              <div className="space-y-3 mb-6">
-                {planDetails.agent.features.map((feature, index) => (
-                  <div key={index} className="flex items-center">
-                    <CheckCircle className="w-4 h-4 text-orange-400 mr-2 flex-shrink-0" />
-                    <span className="text-gray-300 text-sm">{feature}</span>
+          {plans.agent && (
+            <div className="relative group cursor-pointer transition-all duration-300 hover:scale-102">
+              <div className="relative bg-gradient-to-br from-gray-900/80 to-gray-800/80 backdrop-blur-xl border-2 border-gray-700 hover:border-orange-400/50 rounded-3xl p-6 transition-all duration-300">
+                <div className="text-center mb-6">
+                  <div className="flex items-center justify-center mb-4">
+                    <Users className="w-5 h-5 text-orange-400 mr-2" />
+                    <h3 className="text-lg font-bold text-white">{plans.agent.name}</h3>
                   </div>
-                ))}
-              </div>
-              
-              <div className="text-center">
-                <Button 
-                  onClick={() => handlePurchase('agent')}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-bold py-3 rounded-xl text-sm transition-all duration-300"
-                >
-                  <Zap className="w-4 h-4 mr-2" />
-                  立即购买
-                </Button>
+                  <p className="text-gray-400 mb-4 text-sm">{plans.agent.description}</p>
+                  
+                  <div className="mb-4">
+                    <span className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
+                      ¥{plans.agent.price}
+                    </span>
+                    <span className="text-gray-400 text-sm ml-2">{plans.agent.period}</span>
+                  </div>
+                  
+                  <div className="text-xs text-gray-500 mb-4">
+                    推广3-4单即可回本
+                  </div>
+                </div>
+                
+                <div className="space-y-3 mb-6">
+                  {Array.isArray(plans.agent.features) && (plans.agent.features as string[]).map((feature, index) => (
+                    <div key={index} className="flex items-center">
+                      <CheckCircle className="w-4 h-4 text-orange-400 mr-2 flex-shrink-0" />
+                      <span className="text-gray-300 text-sm">{feature}</span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="text-center">
+                  <Button 
+                    onClick={() => handlePurchase('agent')}
+                    className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white font-bold py-3 rounded-xl text-sm transition-all duration-300"
+                    disabled={paymentLoading}
+                  >
+                    {paymentLoading && selectedPlanType === 'agent' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
+                    立即购买
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -248,29 +322,36 @@ const Payment = () => {
               
               {/* Payment QR Code */}
               <div className="bg-white rounded-xl p-3 mb-4 flex justify-center w-32 h-32 mx-auto">
-                <img 
-                  src="/lovable-uploads/a0ec2427-9113-4553-9e8e-17170fae056b.png" 
-                  alt="支付宝支付二维码" 
-                  className="w-full h-full object-contain"
-                />
+                {qrCodeUrl ? (
+                  <img 
+                    src={qrCodeUrl} 
+                    alt="支付二维码" 
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center w-full h-full text-gray-400">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                )}
               </div>
 
               <div className="mb-4">
                 <div className="text-sm font-bold text-white mb-1">
-                  ¥{planDetails[selectedPlan].total}
+                  ¥{currentPlanDetails.price}
                 </div>
-                <div className="text-gray-400 text-xs">{planDetails[selectedPlan].description}</div>
+                <div className="text-gray-400 text-xs">{currentPlanDetails.name}</div>
               </div>
             </div>
 
             <div className="text-center">
               <p className="text-gray-400 text-xs mb-4">
-                支付宝扫码支付，会员权限自动开通
+                请使用支付宝扫描上方二维码完成支付。支付成功后，会员权限将自动开通。
               </p>
               <Button 
                 className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 rounded-xl text-sm transition-all duration-300"
+                onClick={handleClosePayment} // Just close for now, actual status update via webhook
               >
-                确认支付
+                我已支付 (关闭)
               </Button>
             </div>
           </div>

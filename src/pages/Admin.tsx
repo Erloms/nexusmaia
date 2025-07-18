@@ -5,100 +5,63 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast"; // Updated import
+import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, CreditCard, Settings, UserCheck, UserPlus, LayoutDashboard, Menu } from 'lucide-react';
 import Navigation from "@/components/Navigation";
-import PaymentConfig from '@/components/PaymentConfig'; // Import the new PaymentConfig component
+import PaymentConfig from '@/components/PaymentConfig';
+import AdminUserManagement from '@/components/AdminUserManagement'; // Import AdminUserManagement
+import { supabase } from '@/integrations/supabase/client';
+import { Database } from '@/integrations/supabase/types';
 
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  membershipType: 'free' | 'annual' | 'lifetime';
-  membershipExpiry?: string;
-  joinDate: string;
-}
-
-interface PaymentOrder {
-  id: string;
-  userId: string;
-  email: string;
-  amount: number;
-  plan: 'annual' | 'lifetime';
-  status: 'pending' | 'completed' | 'failed';
-  timestamp: string;
-  paymentMethod: string;
-}
+// Define types for data fetched from Supabase
+type UserProfile = Database['public']['Tables']['profiles']['Row'];
+type Order = Database['public']['Tables']['orders']['Row']; // Use 'Order' type from DB
 
 const Admin = () => {
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>([]);
-  const [paymentOrders, setPaymentOrders] = useState<PaymentOrder[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [users, setUsers] = useState<UserProfile[]>([]); // State for users from DB
+  const [paymentOrders, setPaymentOrders] = useState<Order[]>([]); // State for orders from DB
+  const [searchTerm, setSearchTerm] = useState(''); // Keep for user search within AdminUserManagement
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Manual activation form - 支持多种标识符
+  // Manual activation form
   const [activationIdentifier, setActivationIdentifier] = useState('');
-  const [activationPlan, setActivationPlan] = useState<'annual' | 'lifetime'>('annual');
+  const [activationPlan, setActivationPlan] = useState<'annual' | 'lifetime' | 'agent'>('annual'); // Added agent plan
   
   useEffect(() => {
-    // Load users from localStorage
-    const savedUsers = localStorage.getItem('nexusAi_users');
-    if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
-    } else {
-      // Add some mock data for demonstration
-      const mockUsers: User[] = [
-        {
-          id: '1',
-          email: 'user1@example.com',
-          name: '用户一',
-          membershipType: 'free',
-          joinDate: '2024-01-15'
-        },
-        {
-          id: '2',
-          email: 'user2@example.com',
-          name: '用户二',
-          membershipType: 'annual',
-          membershipExpiry: '2025-01-15',
-          joinDate: '2024-01-20'
-        }
-      ];
-      setUsers(mockUsers);
-      localStorage.setItem('nexusAi_users', JSON.stringify(mockUsers));
-    }
+    // Fetch users from Supabase
+    const fetchUsers = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*');
+      if (error) {
+        console.error('Error fetching users for Admin:', error);
+        toast({ title: "加载用户失败", description: "无法获取用户列表", variant: "destructive" });
+      } else {
+        setUsers(data);
+      }
+    };
 
-    // Load payment orders
-    const savedOrders = localStorage.getItem('nexusAi_payment_orders');
-    if (savedOrders) {
-      setPaymentOrders(JSON.parse(savedOrders));
-    } else {
-      // Add some mock payment data
-      const mockOrders: PaymentOrder[] = [
-        {
-          id: '1',
-          userId: '3',
-          email: 'newuser@example.com',
-          amount: 99,
-          plan: 'annual',
-          status: 'pending',
-          timestamp: new Date().toISOString(),
-          paymentMethod: 'alipay'
-        }
-      ];
-      setPaymentOrders(mockOrders);
-      localStorage.setItem('nexusAi_payment_orders', JSON.stringify(mockOrders));
-    }
-  }, []);
+    // Fetch payment orders from Supabase
+    const fetchPaymentOrders = async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false }); // Order by latest
+      if (error) {
+        console.error('Error fetching payment orders for Admin:', error);
+        toast({ title: "加载订单失败", description: "无法获取支付订单列表", variant: "destructive" });
+      } else {
+        setPaymentOrders(data);
+      }
+    };
 
-  const filteredUsers = users.filter(user =>
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    fetchUsers();
+    fetchPaymentOrders();
+  }, []); // Run once on mount
 
-  const handleManualActivation = () => {
+  const handleManualActivation = async () => {
     if (!activationIdentifier) {
       toast({
         title: "错误",
@@ -108,110 +71,158 @@ const Admin = () => {
       return;
     }
 
-    // 检查是否为邮箱格式
-    const isEmail = activationIdentifier.includes('@');
-    // 检查是否为手机号格式（简单验证）
-    const isPhone = /^1[3-9]\d{9}$/.test(activationIdentifier);
-    
-    const updatedUsers = users.map(user => {
-      // 支持邮箱、用户名或手机号匹配
-      if (user.email === activationIdentifier || 
-          user.name === activationIdentifier ||
-          user.id === activationIdentifier) {
-        const expiryDate = activationPlan === 'annual' 
-          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-          : undefined;
-        
-        return {
-          ...user,
-          membershipType: activationPlan,
-          membershipExpiry: expiryDate
-        };
+    try {
+      // First, try to find the user by email or username
+      let targetUser: UserProfile | null = null;
+      const { data: existingProfiles, error: fetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .or(`email.eq.${activationIdentifier},username.eq.${activationIdentifier}`);
+
+      if (fetchError) throw fetchError;
+
+      if (existingProfiles && existingProfiles.length > 0) {
+        targetUser = existingProfiles[0];
+      } else {
+        // If user not found, try to find by ID (if identifier is a UUID)
+        if (activationIdentifier.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
+          const { data: userById, error: idError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', activationIdentifier)
+            .single();
+          if (idError && idError.code !== 'PGRST116') throw idError;
+          targetUser = userById;
+        }
       }
-      return user;
-    });
 
-    // If user doesn't exist, create new one
-    if (!users.find(u => u.email === activationIdentifier || u.name === activationIdentifier || u.id === activationIdentifier)) {
-      const newUser: User = {
-        id: Date.now().toString(),
-        email: isEmail ? activationIdentifier : `${activationIdentifier}@system.generated`,
-        name: isEmail ? activationIdentifier.split('@')[0] : activationIdentifier,
-        membershipType: activationPlan,
-        membershipExpiry: activationPlan === 'annual' 
-          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-          : undefined,
-        joinDate: new Date().toISOString()
-      };
-      updatedUsers.push(newUser);
+      if (!targetUser) {
+        // If user still not found, create a new user in auth.users and profiles
+        // Note: This requires admin privileges for supabase.auth.admin.createUser
+        const { data: newUserAuth, error: signUpError } = await supabase.auth.admin.createUser({
+          email: activationIdentifier.includes('@') ? activationIdentifier : `${activationIdentifier}@temp.com`, // Use temp email if not email
+          password: Math.random().toString(36).substring(2, 15), // Generate a random password
+          email_confirm: true,
+          user_metadata: { username: activationIdentifier.includes('@') ? activationIdentifier.split('@')[0] : activationIdentifier }
+        });
+        if (signUpError) throw signUpError;
+        
+        // Wait a bit for the handle_new_user trigger to run and profile to be created
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const { data: createdProfile, error: createdProfileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', newUserAuth.user.id)
+          .single();
+        if (createdProfileError) throw createdProfileError;
+        targetUser = createdProfile;
+      }
+
+      if (!targetUser) {
+        throw new Error("无法找到或创建用户。");
+      }
+
+      // Map activationPlan to actual plan_id from membership_plans table
+      let planIdToActivate: string;
+      if (activationPlan === 'annual') {
+        planIdToActivate = 'a0e1b2c3-d4e5-f6a7-b8c9-d0e1f2a3b4c5';
+      } else if (activationPlan === 'lifetime') {
+        planIdToActivate = 'e1f2a3b4-c5d6-e7f8-a9b0-c1d2e3f4a5b6';
+      } else if (activationPlan === 'agent') {
+        planIdToActivate = 'f5a6b7c8-d9e0-f1a2-b3c4-d5e6f7a8b9c0';
+      } else {
+        throw new Error("无效的会员类型。");
+      }
+
+      // Activate membership using the activate_membership function
+      const { error: activateError } = await supabase.rpc('activate_membership', {
+        p_user_id: targetUser.id,
+        p_plan_id: planIdToActivate,
+        p_order_id: null // No order ID for manual activation
+      });
+
+      if (activateError) throw activateError;
+
+      setActivationIdentifier('');
+      
+      toast({
+        title: "成功",
+        description: `已为 ${targetUser.username || targetUser.email} 开通${activationPlan === 'annual' ? '年' : (activationPlan === 'lifetime' ? '永久' : '代理')}会员`,
+      });
+
+      // Re-fetch users to update the list
+      const { data: updatedUsersData, error: updatedUsersError } = await supabase
+        .from('profiles')
+        .select('*');
+      if (updatedUsersError) console.error('Error re-fetching users:', updatedUsersError);
+      else setUsers(updatedUsersData);
+
+    } catch (error: any) {
+      console.error('Manual activation error:', error);
+      toast({
+        title: "操作失败",
+        description: error.message || "手动开通会员时发生错误",
+        variant: "destructive"
+      });
     }
-
-    setUsers(updatedUsers);
-    localStorage.setItem('nexusAi_users', JSON.stringify(updatedUsers));
-    setActivationIdentifier('');
-    
-    toast({
-      title: "成功",
-      description: `已为 ${activationIdentifier} 开通${activationPlan === 'annual' ? '年' : '永久'}会员`,
-    });
   };
 
-  const approvePayment = (orderId: string) => {
-    const order = paymentOrders.find(o => o.id === orderId);
-    if (!order) return;
-
-    // Update order status
-    const updatedOrders = paymentOrders.map(o => 
-      o.id === orderId ? { ...o, status: 'completed' as const } : o
-    );
-    setPaymentOrders(updatedOrders);
-    localStorage.setItem('nexusAi_payment_orders', JSON.stringify(updatedOrders));
-
-    // Update user membership
-    const updatedUsers = users.map(user => {
-      if (user.email === order.email) {
-        const expiryDate = order.plan === 'annual' 
-          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-          : undefined;
-        
-        return {
-          ...user,
-          membershipType: order.plan,
-          membershipExpiry: expiryDate
-        };
+  const approvePayment = async (orderId: string, userId: string, planType: string) => {
+    try {
+      // Map planType to actual plan_id from membership_plans table
+      let planIdToActivate: string;
+      if (planType === 'annual') {
+        planIdToActivate = 'a0e1b2c3-d4e5-f6a7-b8c9-d0e1f2a3b4c5';
+      } else if (planType === 'lifetime') {
+        planIdToActivate = 'e1f2a3b4-c5d6-e7f8-a9b0-c1d2e3f4a5b6';
+      } else if (planType === 'agent') {
+        planIdToActivate = 'f5a6b7c8-d9e0-f1a2-b3c4-d5e6f7a8b9c0';
+      } else {
+        throw new Error("无效的会员类型。");
       }
-      return user;
-    });
 
-    // If user doesn't exist, create new one
-    if (!users.find(u => u.email === order.email)) {
-      const newUser: User = {
-        id: Date.now().toString(),
-        email: order.email,
-        name: order.email.split('@')[0],
-        membershipType: order.plan,
-        membershipExpiry: order.plan === 'annual' 
-          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-          : undefined,
-        joinDate: new Date().toISOString()
-      };
-      updatedUsers.push(newUser);
+      // Activate membership using the activate_membership function
+      const { error: activateError } = await supabase.rpc('activate_membership', {
+        p_user_id: userId,
+        p_plan_id: planIdToActivate,
+        p_order_id: orderId
+      });
+      if (activateError) throw activateError;
+
+      toast({
+        title: "支付已确认",
+        description: `已为用户 ${userId.slice(0, 8)}... 开通会员权限`,
+      });
+
+      // Re-fetch orders and users to update the lists
+      const { data: updatedOrdersData, error: updatedOrdersError } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (updatedOrdersError) console.error('Error re-fetching orders:', updatedOrdersError);
+      else setPaymentOrders(updatedOrdersData);
+
+      const { data: updatedUsersData, error: updatedUsersError } = await supabase
+        .from('profiles')
+        .select('*');
+      if (updatedUsersError) console.error('Error re-fetching users:', updatedUsersError);
+      else setUsers(updatedUsersData);
+
+    } catch (error: any) {
+      console.error('Approve payment error:', error);
+      toast({
+        title: "操作失败",
+        description: error.message || "确认支付时发生错误",
+        variant: "destructive"
+      });
     }
-
-    setUsers(updatedUsers);
-    localStorage.setItem('nexusAi_users', JSON.stringify(updatedUsers));
-
-    toast({
-      title: "支付已确认",
-      description: `已为 ${order.email} 开通会员权限`,
-    });
   };
 
   const stats = {
     totalUsers: users.length,
-    paidUsers: users.filter(u => u.membershipType !== 'free').length,
+    paidUsers: users.filter(u => u.membership_type !== 'free').length,
     pendingPayments: paymentOrders.filter(o => o.status === 'pending').length,
-    totalRevenue: paymentOrders.filter(o => o.status === 'completed').reduce((sum, o) => sum + o.amount, 0)
+    totalRevenue: paymentOrders.filter(o => o.status === 'completed').reduce((sum, o) => sum + parseFloat(o.amount as any), 0) // Ensure amount is number
   };
 
   return (
@@ -341,64 +352,7 @@ const Admin = () => {
 
           {/* 用户管理 */}
           {activeTab === 'users' && (
-            <Card className="bg-[#1a2740] border-[#203042]/60">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center">
-                  <Users className="mr-2 h-5 w-5" />
-                  用户列表
-                </CardTitle>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    placeholder="搜索用户..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="bg-[#14202c] border-[#2e4258] text-white max-w-sm"
-                  />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-[#203042]/60">
-                        <th className="text-left py-3 px-4 text-white font-medium">邮箱</th>
-                        <th className="text-left py-3 px-4 text-white font-medium">姓名</th>
-                        <th className="text-left py-3 px-4 text-white font-medium">会员类型</th>
-                        <th className="text-left py-3 px-4 text-white font-medium">到期时间</th>
-                        <th className="text-left py-3 px-4 text-white font-medium">加入时间</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredUsers.map(user => (
-                        <tr key={user.id} className="border-b border-[#203042]/30">
-                          <td className="py-3 px-4 text-white">{user.email}</td>
-                          <td className="py-3 px-4 text-white">{user.name}</td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded text-xs ${
-                              user.membershipType === 'lifetime' ? 'bg-purple-600 text-white' :
-                              user.membershipType === 'annual' ? 'bg-blue-600 text-white' :
-                              'bg-gray-600 text-white'
-                            }`}>
-                              {user.membershipType === 'lifetime' ? '永久会员' :
-                               user.membershipType === 'annual' ? '年会员' : '免费用户'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-white">
-                            {user.membershipExpiry 
-                              ? new Date(user.membershipExpiry).toLocaleDateString()
-                              : user.membershipType === 'lifetime' ? '永久' : '-'
-                            }
-                          </td>
-                          <td className="py-3 px-4 text-white">
-                            {new Date(user.joinDate).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+            <AdminUserManagement users={users} setUsers={setUsers} />
           )}
 
           {/* 支付管理 */}
@@ -412,7 +366,7 @@ const Admin = () => {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-[#203042]/60">
-                        <th className="text-left py-3 px-4 text-white font-medium">用户邮箱</th>
+                        <th className="text-left py-3 px-4 text-white font-medium">用户ID</th>
                         <th className="text-left py-3 px-4 text-white font-medium">套餐</th>
                         <th className="text-left py-3 px-4 text-white font-medium">金额</th>
                         <th className="text-left py-3 px-4 text-white font-medium">支付方式</th>
@@ -424,12 +378,12 @@ const Admin = () => {
                     <tbody>
                       {paymentOrders.map(order => (
                         <tr key={order.id} className="border-b border-[#203042]/30">
-                          <td className="py-3 px-4 text-white">{order.email}</td>
+                          <td className="py-3 px-4 text-white">{order.user_id?.slice(0, 8)}...</td>
                           <td className="py-3 px-4 text-white">
-                            {order.plan === 'annual' ? '年会员' : '永久会员'}
+                            {order.order_type === 'annual' ? '年会员' : (order.order_type === 'lifetime' ? '永久会员' : '代理商')}
                           </td>
                           <td className="py-3 px-4 text-white">¥{order.amount}</td>
-                          <td className="py-3 px-4 text-white">{order.paymentMethod}</td>
+                          <td className="py-3 px-4 text-white">{order.payment_method || '未知'}</td>
                           <td className="py-3 px-4">
                             <span className={`px-2 py-1 rounded text-xs ${
                               order.status === 'completed' ? 'bg-green-600 text-white' :
@@ -441,13 +395,13 @@ const Admin = () => {
                             </span>
                           </td>
                           <td className="py-3 px-4 text-white">
-                            {new Date(order.timestamp).toLocaleDateString()}
+                            {new Date(order.created_at || '').toLocaleDateString()}
                           </td>
                           <td className="py-3 px-4">
                             {order.status === 'pending' && (
                               <Button
                                 size="sm"
-                                onClick={() => approvePayment(order.id)}
+                                onClick={() => approvePayment(order.id, order.user_id || '', order.order_type || '')}
                                 className="bg-green-600 hover:bg-green-700"
                               >
                                 确认支付
@@ -491,13 +445,14 @@ const Admin = () => {
                     
                     <div>
                       <Label htmlFor="activationPlan" className="text-white">会员类型</Label>
-                      <Select value={activationPlan} onValueChange={(value: 'annual' | 'lifetime') => setActivationPlan(value)}>
+                      <Select value={activationPlan} onValueChange={(value: 'annual' | 'lifetime' | 'agent') => setActivationPlan(value)}>
                         <SelectTrigger className="bg-[#14202c] border-[#2e4258] text-white">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="annual">年会员 (¥99)</SelectItem>
                           <SelectItem value="lifetime">永久会员 (¥399)</SelectItem>
+                          <SelectItem value="agent">代理商 (¥1999)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -525,7 +480,7 @@ const Admin = () => {
 
           {/* 支付宝配置 */}
           {activeTab === 'alipay' && (
-            <PaymentConfig /> // Use the new PaymentConfig component
+            <PaymentConfig />
           )}
         </div>
       </div>

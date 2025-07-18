@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Rocket, Image, MessageSquare, Volume2, ArrowUpRight } from 'lucide-react';
 
 const UserDashboard = () => {
-  const { user, checkPaymentStatus } = useAuth();
+  const { user, userProfile, checkPaymentStatus } = useAuth(); // Get userProfile and checkPaymentStatus
   const navigate = useNavigate();
   const [usageStats, setUsageStats] = useState({
     chat: { used: 0, total: 5 },
@@ -18,7 +17,7 @@ const UserDashboard = () => {
 
   useEffect(() => {
     if (user) {
-      // 从本地存储获取使用统计
+      // 从本地存储获取使用统计 (these are free tier limits, can remain local for now)
       try {
         const chatUsage = JSON.parse(localStorage.getItem(`nexusAi_chat_usage_${user.id}`) || '{"remaining": 5}');
         const imageUsage = JSON.parse(localStorage.getItem(`nexusAi_image_usage_${user.id}`) || '{"remaining": 10}');
@@ -44,6 +43,9 @@ const UserDashboard = () => {
   };
 
   if (!user) return null;
+
+  // Determine if the user is a paid member based on userProfile
+  const isPaidMember = checkPaymentStatus(); // This now uses the database-driven logic
 
   return (
     <div className="py-8">
@@ -129,7 +131,7 @@ const UserDashboard = () => {
         </Card>
       </div>
       
-      {!checkPaymentStatus() && (
+      {!isPaidMember && ( // Use isPaidMember here
         <Card className="bg-gradient-to-br from-nexus-blue/10 to-nexus-purple/10 border border-nexus-blue/30">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">

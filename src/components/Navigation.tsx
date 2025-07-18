@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { Menu, X, MessageSquare, Image, Mic, Settings, LogOut, User, Crown } fro
 
 const Navigation = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, signOut } = useAuth();
+  const { user, userProfile, signOut } = useAuth(); // Get userProfile from AuthContext
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -28,21 +27,28 @@ const Navigation = () => {
   ];
 
   const getUserDisplayName = () => {
-    if (!user) return '';
-    return user.email?.split('@')[0] || '未知用户';
+    if (!userProfile) return ''; // Use userProfile
+    return userProfile.username || userProfile.email?.split('@')[0] || '未知用户';
   };
 
   const isVipUser = () => {
-    if (!user) return false;
-    
-    // 检查管理员权限
-    if (user.email === 'master@admin.com' || user.email === 'morphy.realm@gmail.com') {
+    if (!userProfile) return false; // Use userProfile
+
+    // Admin check
+    if (userProfile.role === 'admin') {
       return true;
     }
+
+    // Membership check
+    if (userProfile.membership_type === 'lifetime' || userProfile.membership_type === 'agent') {
+      return true;
+    }
+    if (userProfile.membership_type === 'annual' && userProfile.membership_expires_at) {
+      const expiryDate = new Date(userProfile.membership_expires_at);
+      return expiryDate > new Date();
+    }
     
-    // 检查VIP用户
-    const vipUsers = JSON.parse(localStorage.getItem('vipUsers') || '[]');
-    return vipUsers.includes(user.id);
+    return false;
   };
 
   useEffect(() => {

@@ -280,6 +280,102 @@ export type Database = {
         }
         Relationships: []
       }
+      membership_plans: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          price: number;
+          duration_days: number | null;
+          type: string; // 'annual', 'lifetime', 'agent', 'free'
+          features: Json | null; // JSONB for features array
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          price: number;
+          duration_days?: number | null;
+          type: string;
+          features?: Json | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          price?: number;
+          duration_days?: number | null;
+          type?: string;
+          features?: Json | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      orders: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          plan_id: string | null; // UUID for membership_plans
+          amount: number;
+          status: string; // 'pending', 'paid', 'failed'
+          payment_method: string | null;
+          payment_id: string | null;
+          order_type: string | null;
+          subject: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          plan_id?: string | null;
+          amount: number;
+          status?: string;
+          payment_method?: string | null;
+          payment_id?: string | null;
+          order_type?: string | null;
+          subject?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string | null;
+          plan_id?: string | null;
+          amount?: number;
+          status?: string;
+          payment_method?: string | null;
+          payment_id?: string | null;
+          order_type?: string | null;
+          subject?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "orders_plan_id_fkey";
+            columns: ["plan_id"];
+            isOneToOne: false;
+            referencedRelation: "membership_plans";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "orders_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users"; // Assuming auth.users
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       payment_configs: {
         Row: {
           id: string;
@@ -725,6 +821,10 @@ export type Database = {
         Args: { user_id: string }
         Returns: boolean
       }
+      activate_membership: {
+        Args: { p_user_id: string; p_plan_id: string; p_order_id: string | null }
+        Returns: undefined
+      }
     }
     Enums: {
       user_role: "admin" | "user"
@@ -817,45 +917,3 @@ export type TablesUpdate<
       ? U
       : never
     : never
-
-export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
-
-export const Constants = {
-  public: {
-    Enums: {
-      user_role: ["admin", "user"],
-    },
-  },
-} as const

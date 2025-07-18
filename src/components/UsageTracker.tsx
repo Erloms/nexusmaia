@@ -4,7 +4,7 @@ import { MessageSquare, Image, Volume2, Crown, ArrowUpRight } from 'lucide-react
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
-import { useToast } from "@/hooks/use-toast"; // Updated import
+import { useToast } from "@/hooks/use-toast";
 
 interface UsageStats {
   chat: { used: number; total: number };
@@ -17,18 +17,17 @@ interface UsageTrackerProps {
 }
 
 const UsageTracker = ({ onUsageUpdate }: UsageTrackerProps) => {
-  const { user } = useAuth();
+  const { user, userProfile, checkPaymentStatus } = useAuth(); // Get userProfile and checkPaymentStatus
   const navigate = useNavigate();
-  const { toast } = useToast(); // Initialize useToast
+  const { toast } = useToast();
   const [usage, setUsage] = useState<UsageStats>({
     chat: { used: 0, total: 10 },
     image: { used: 0, total: 10 },
     voice: { used: 0, total: 10 }
   });
 
-  // 检查是否为付费用户
-  const isPaidUser = user && JSON.parse(localStorage.getItem('nexusAi_users') || '[]')
-    .find((u: any) => u.id === user.id)?.isPaid;
+  // Check if the user is a paid user using the AuthContext's logic
+  const isPaidUser = checkPaymentStatus();
 
   useEffect(() => {
     if (user) {
@@ -40,15 +39,13 @@ const UsageTracker = ({ onUsageUpdate }: UsageTrackerProps) => {
     if (!user) return;
 
     try {
-      // 加载聊天使用情况
+      // Load usage from local storage (these are free tier limits)
       const chatUsage = localStorage.getItem(`chat_usage_${user.id}`);
       const chatUsed = chatUsage ? parseInt(chatUsage) : 0;
 
-      // 加载图像使用情况
       const imageUsage = JSON.parse(localStorage.getItem(`nexusAi_image_usage_${user.id}`) || '{"remaining": 10}');
       const imageUsed = 10 - imageUsage.remaining;
 
-      // 加载语音使用情况  
       const voiceUsage = JSON.parse(localStorage.getItem(`nexusAi_voice_usage_${user.id}`) || '{"remaining": 10}');
       const voiceUsed = 10 - voiceUsage.remaining;
 
@@ -76,7 +73,7 @@ const UsageTracker = ({ onUsageUpdate }: UsageTrackerProps) => {
     return 'bg-nexus-cyan';
   };
 
-  if (isPaidUser) {
+  if (isPaidUser) { // Use the database-driven isPaidUser
     return (
       <div className="bg-gradient-to-br from-nexus-dark/80 to-nexus-purple/30 backdrop-blur-sm rounded-xl border border-nexus-blue/20 p-6">
         <div className="flex items-center justify-center text-center">
