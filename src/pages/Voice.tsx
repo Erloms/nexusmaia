@@ -7,7 +7,9 @@ import {
   Volume2, 
   Download, 
   CheckCircle2,
-  ArrowLeft
+  ArrowLeft,
+  BookText, // For strict reading
+  Sparkles // For interpretive reading
 } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -29,6 +31,7 @@ interface HistoryItem {
   voice: string;
   text: string;
   audioUrl?: string;
+  readingMode: 'strict' | 'interpretive';
 }
 
 const Voice = () => {
@@ -40,29 +43,44 @@ const Voice = () => {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [readingMode, setReadingMode] = useState<'strict' | 'interpretive'>('strict'); // New state for reading mode
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Function to generate a consistent color based on string hash
+  const stringToColor = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    let color = '#';
+    for (let i = 0; i < 3; i++) {
+      const value = (hash >> (i * 8)) & 0xFF;
+      color += ('00' + value.toString(16)).substr(-2);
+    }
+    return color;
+  };
 
   // Voice options - expanded to 19 options with English IDs
   const voiceOptions: VoiceOption[] = [
-    { id: 'alloy', name: 'Alloy', description: '平衡中性', color: '#8B5CF6' },
-    { id: 'echo', name: 'Echo', description: '深沉有力', color: '#6366F1' },
-    { id: 'fable', name: 'Fable', description: '温暖讲述', color: '#8B5CF6' },
-    { id: 'onyx', name: 'Onyx', description: '威严庄重', color: '#333333' },
-    { id: 'nova', name: 'Nova', description: '友好专业', color: '#10B981' },
-    { id: 'shimmer', name: 'Shimmer', description: '轻快明亮', color: '#60A5FA' },
-    { id: 'coral', name: 'Coral', description: '温柔平静', color: '#F87171' },
-    { id: 'verse', name: 'Verse', description: '生动诗意', color: '#FBBF24' },
-    { id: 'ballad', name: 'Ballad', description: '抒情柔和', color: '#A78BFA' },
-    { id: 'ash', name: 'Ash', description: '思考沉稳', color: '#4B5563' },
-    { id: 'sage', name: 'Sage', description: '智慧老练', color: '#059669' },
-    { id: 'amuch', name: 'Amuch', description: '清晰有力', color: '#FF7F50' }, // New
-    { id: 'aster', name: 'Aster', description: '柔和自然', color: '#40E0D0' }, // New
-    { id: 'brook', name: 'Brook', description: '流畅舒适', color: '#3B82F6' },
-    { id: 'clover', name: 'Clover', description: '活泼年轻', color: '#EC4899' },
-    { id: 'dan', name: 'Dan', description: '男声稳重', color: '#1F2937' },
-    { id: 'elan', name: 'Elan', description: '优雅流利', color: '#7C3AED' },
-    { id: 'marilyn', name: 'Marilyn', description: '甜美悦耳', color: '#FF69B4' }, // New
-    { id: 'meadow', name: 'Meadow', description: '清新宁静', color: '#9ACD32' }, // New
+    { id: 'alloy', name: 'Alloy', description: '平衡中性', color: stringToColor('alloy') },
+    { id: 'echo', name: 'Echo', description: '深沉有力', color: stringToColor('echo') },
+    { id: 'fable', name: 'Fable', description: '温暖讲述', color: stringToColor('fable') },
+    { id: 'onyx', name: 'Onyx', description: '威严庄重', color: stringToColor('onyx') },
+    { id: 'nova', name: 'Nova', description: '友好专业', color: stringToColor('nova') },
+    { id: 'shimmer', name: 'Shimmer', description: '轻快明亮', color: stringToColor('shimmer') },
+    { id: 'coral', name: 'Coral', description: '温柔平静', color: stringToColor('coral') },
+    { id: 'verse', name: 'Verse', description: '生动诗意', color: stringToColor('verse') },
+    { id: 'ballad', name: 'Ballad', description: '抒情柔和', color: stringToColor('ballad') },
+    { id: 'ash', name: 'Ash', description: '思考沉稳', color: stringToColor('ash') },
+    { id: 'sage', name: 'Sage', description: '智慧老练', color: stringToColor('sage') },
+    { id: 'amuch', name: 'Amuch', description: '清晰有力', color: stringToColor('amuch') },
+    { id: 'aster', name: 'Aster', description: '柔和自然', color: stringToColor('aster') },
+    { id: 'brook', name: 'Brook', description: '流畅舒适', color: stringToColor('brook') },
+    { id: 'clover', name: 'Clover', description: '活泼年轻', color: stringToColor('clover') },
+    { id: 'dan', name: 'Dan', description: '男声稳重', color: stringToColor('dan') },
+    { id: 'elan', name: 'Elan', description: '优雅流利', color: stringToColor('elan') },
+    { id: 'marilyn', name: 'Marilyn', description: '甜美悦耳', color: stringToColor('marilyn') },
+    { id: 'meadow', name: 'Meadow', description: '清新宁静', color: stringToColor('meadow') },
   ];
 
   // Load history from localStorage
@@ -117,11 +135,20 @@ const Voice = () => {
     }
 
     setLoading(true);
-    
+    setAudioUrl(null); // Clear previous audio
+
     try {
+      let promptForApi = text;
+      if (readingMode === 'strict') {
+        promptForApi = `请朗读以下文本：${text}`; // Explicitly ask to read
+      } else { // interpretive mode
+        promptForApi = `请将以下文本转换为自媒体口播风格，并朗读：${text}`; // Ask for rephrasing then reading
+      }
+
       // Use the selectedVoice ID directly in the URL
-      const url = `https://text.pollinations.ai/${encodeURIComponent(text)}?model=openai-audio&voice=${selectedVoice}&nologo=true`;
+      const url = `https://text.pollinations.ai/${encodeURIComponent(promptForApi)}?model=openai-audio&voice=${selectedVoice}&nologo=true`;
       
+      // Simulate loading delay for better UX
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       setAudioUrl(url);
@@ -130,8 +157,9 @@ const Voice = () => {
         id: Date.now(),
         timestamp: new Date(),
         voice: selectedVoice, // Store the English voice ID
-        text: text,
-        audioUrl: url
+        text: text, // Store original text
+        audioUrl: url,
+        readingMode: readingMode
       };
       
       setHistory(prev => [newHistoryItem, ...prev.slice(0, 9)]);
@@ -205,7 +233,7 @@ const Voice = () => {
                     <RadioGroup 
                       value={selectedVoice} 
                       onValueChange={setSelectedVoice}
-                      className="grid grid-cols-3 gap-4"
+                      className="grid grid-cols-4 gap-4"
                     >
                       {voiceOptions.map((voice) => (
                         <div
@@ -230,11 +258,79 @@ const Voice = () => {
                                 <CheckCircle2 className="h-4 w-4 text-white" />
                               </div>
                             )}
+                            <div 
+                              className="w-10 h-10 rounded-full flex items-center justify-center mb-2"
+                              style={{ backgroundColor: voice.color }}
+                            >
+                              <Volume2 className="h-5 w-5 text-white" /> {/* Icon for voice */}
+                            </div>
                             <div className="text-white font-medium text-sm">{voice.name}</div>
                             <div className="text-gray-400 text-xs">{voice.description}</div>
                           </label>
                         </div>
                       ))}
+                    </RadioGroup>
+                  </div>
+
+                  <div className="mb-8">
+                    <h4 className="text-cyan-400 font-medium mb-6 text-lg">朗读模式</h4>
+                    <RadioGroup 
+                      value={readingMode} 
+                      onValueChange={(value: 'strict' | 'interpretive') => setReadingMode(value)}
+                      className="grid grid-cols-2 gap-4"
+                    >
+                      <div
+                        className={`relative cursor-pointer p-4 rounded-lg border transition-all ${
+                          readingMode === 'strict'
+                            ? 'border-cyan-400 bg-cyan-400/10'
+                            : 'border-[#203042]/60 bg-[#0f1419] hover:bg-[#1a2740]'
+                        }`}
+                      >
+                        <RadioGroupItem
+                          value="strict"
+                          id="mode-strict"
+                          className="absolute opacity-0"
+                        />
+                        <label
+                          htmlFor="mode-strict"
+                          className="flex flex-col items-center cursor-pointer"
+                        >
+                          {readingMode === 'strict' && (
+                            <div className="absolute -top-2 -right-2 bg-cyan-400 rounded-full">
+                              <CheckCircle2 className="h-4 w-4 text-white" />
+                            </div>
+                          )}
+                          <BookText className="h-8 w-8 text-white mb-2" />
+                          <div className="text-white font-medium text-sm">原文朗读</div>
+                          <div className="text-gray-400 text-xs text-center">严格按照输入文本朗读</div>
+                        </label>
+                      </div>
+                      <div
+                        className={`relative cursor-pointer p-4 rounded-lg border transition-all ${
+                          readingMode === 'interpretive'
+                            ? 'border-purple-400 bg-purple-400/10'
+                            : 'border-[#203042]/60 bg-[#0f1419] hover:bg-[#1a2740]'
+                        }`}
+                      >
+                        <RadioGroupItem
+                          value="interpretive"
+                          id="mode-interpretive"
+                          className="absolute opacity-0"
+                        />
+                        <label
+                          htmlFor="mode-interpretive"
+                          className="flex flex-col items-center cursor-pointer"
+                        >
+                          {readingMode === 'interpretive' && (
+                            <div className="absolute -top-2 -right-2 bg-purple-400 rounded-full">
+                              <CheckCircle2 className="h-4 w-4 text-white" />
+                            </div>
+                          )}
+                          <Sparkles className="h-8 w-8 text-white mb-2" />
+                          <div className="text-white font-medium text-sm">智能演绎</div>
+                          <div className="text-gray-400 text-xs text-center">转换为自媒体口播风格</div>
+                        </label>
+                      </div>
                     </RadioGroup>
                   </div>
 
@@ -372,6 +468,14 @@ const Voice = () => {
                               <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3"></div>
                               <span className="text-cyan-400 font-medium text-sm">
                                 {voiceOptions.find(v => v.id === item.voice)?.name || item.voice}
+                              </span>
+                              <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium"
+                                style={{ 
+                                  backgroundColor: item.readingMode === 'strict' ? '#10B98120' : '#8B5CF620',
+                                  color: item.readingMode === 'strict' ? '#10B981' : '#8B5CF6'
+                                }}
+                              >
+                                {item.readingMode === 'strict' ? '原文' : '演绎'}
                               </span>
                             </div>
                             <span className="text-gray-400 text-xs">{formatTime(item.timestamp)}</span>
