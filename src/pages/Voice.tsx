@@ -83,13 +83,13 @@ const Voice = () => {
     { id: 'elan', name: 'Elan', description: '优雅流利', color: stringToColor('elan'), gender: 'female' },
     { id: 'marilyn', name: 'Marilyn', description: '甜美悦耳', color: stringToColor('marilyn'), gender: 'female' },
     { id: 'meadow', name: 'Meadow', description: '清新宁静', color: stringToColor('meadow'), gender: 'female' },
-    { id: 'browser-native', name: '本地语音助手', description: '浏览器内置', color: stringToColor('browser-native'), gender: 'neutral' },
+    { id: 'browser-native', name: '小雅', description: '浏览器内置', color: stringToColor('browser-native'), gender: 'female' }, // Renamed to 小雅, set gender
   ];
 
   const voiceOptions: VoiceOption[] = baseVoiceOptions.map(voice => {
     // Generate NFT-style avatar URL using dicebear.com
     const seed = voice.name.replace(/\s/g, ''); // Use voice name as seed
-    const avatarType = 'pixel-art'; // Or 'bottts', 'avataaars', 'identicon'
+    const avatarType = 'avataaars'; // Changed to avataaars for more human-like avatars
     const avatarColor = voice.color.substring(1); // Remove #
     let avatarGenderParam = '';
     if (voice.gender === 'male') {
@@ -195,7 +195,7 @@ const Voice = () => {
           generatedAudioUrl = null; // No direct URL for browser synthesis
           toast({
             title: "语音播放中",
-            description: "正在使用浏览器内置语音合成",
+            description: "正在使用浏览器内置语音合成，音质可能因浏览器而异。", // Added specific toast
             variant: "default",
           });
         } else {
@@ -442,7 +442,7 @@ const Voice = () => {
                       id="text-input"
                       value={text}
                       onChange={(e) => setText(e.target.value)}
-                      placeholder="请输入文本..."
+                      placeholder="请输入文本..." // Simplified placeholder
                       className="min-h-[180px] bg-[#0f1419] border-[#203042]/60 text-white placeholder-gray-500 focus:border-cyan-400 text-base"
                     />
                     <div className="flex justify-between items-center mt-3">
