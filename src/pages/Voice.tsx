@@ -7,9 +7,9 @@ import {
   Volume2, 
   Download, 
   CheckCircle2,
-  ArrowLeft,
   BookText, // For strict reading
-  Sparkles // For interpretive reading
+  Sparkles, // For interpretive reading
+  User, Mic, Speaker, Feather, Smile, Music, Heart, Star, Sun, Cloud, Gift, Bell, Camera, Film // Additional icons
 } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -82,6 +82,15 @@ const Voice = () => {
     { id: 'marilyn', name: 'Marilyn', description: '甜美悦耳', color: stringToColor('marilyn') },
     { id: 'meadow', name: 'Meadow', description: '清新宁静', color: stringToColor('meadow') },
   ];
+
+  // A selection of icons to cycle through for voice options
+  const voiceIcons = [
+    User, Mic, Speaker, Feather, Smile, Sparkles, Music, Heart, Star, Sun, Cloud, Gift, Bell, Camera, Film, BookText, Volume2
+  ];
+
+  const getVoiceIcon = (index: number) => {
+    return voiceIcons[index % voiceIcons.length];
+  };
 
   // Load history from localStorage
   useEffect(() => {
@@ -233,105 +242,79 @@ const Voice = () => {
                     <RadioGroup 
                       value={selectedVoice} 
                       onValueChange={setSelectedVoice}
-                      className="grid grid-cols-4 gap-4"
+                      className="grid grid-cols-5 gap-3" // Changed to grid-cols-5, reduced gap
                     >
-                      {voiceOptions.map((voice) => (
-                        <div
-                          key={voice.id}
-                          className={`relative cursor-pointer p-4 rounded-lg border transition-all ${
-                            selectedVoice === voice.id
-                              ? 'border-cyan-400 bg-cyan-400/10'
-                              : 'border-[#203042]/60 bg-[#0f1419] hover:bg-[#1a2740]'
-                          }`}
-                        >
-                          <RadioGroupItem
-                            value={voice.id}
-                            id={`voice-${voice.id}`}
-                            className="absolute opacity-0"
-                          />
-                          <label
-                            htmlFor={`voice-${voice.id}`}
-                            className="flex flex-col items-center cursor-pointer"
+                      {voiceOptions.map((voice, index) => {
+                        const VoiceIcon = getVoiceIcon(index);
+                        return (
+                          <div
+                            key={voice.id}
+                            className={`relative cursor-pointer p-2 rounded-lg border transition-all ${ // Reduced padding
+                              selectedVoice === voice.id
+                                ? 'border-cyan-400 bg-cyan-400/10'
+                                : 'border-[#203042]/60 bg-[#0f1419] hover:bg-[#1a2740]'
+                            }`}
                           >
-                            {selectedVoice === voice.id && (
-                              <div className="absolute -top-2 -right-2 bg-cyan-400 rounded-full">
-                                <CheckCircle2 className="h-4 w-4 text-white" />
-                              </div>
-                            )}
-                            <div 
-                              className="w-10 h-10 rounded-full flex items-center justify-center mb-2"
-                              style={{ backgroundColor: voice.color }}
+                            <RadioGroupItem
+                              value={voice.id}
+                              id={`voice-${voice.id}`}
+                              className="absolute opacity-0"
+                            />
+                            <label
+                              htmlFor={`voice-${voice.id}`}
+                              className="flex flex-col items-center cursor-pointer"
                             >
-                              <Volume2 className="h-5 w-5 text-white" /> {/* Icon for voice */}
-                            </div>
-                            <div className="text-white font-medium text-sm">{voice.name}</div>
-                            <div className="text-gray-400 text-xs">{voice.description}</div>
-                          </label>
-                        </div>
-                      ))}
+                              {selectedVoice === voice.id && (
+                                <div className="absolute -top-2 -right-2 bg-cyan-400 rounded-full">
+                                  <CheckCircle2 className="h-4 w-4 text-white" />
+                                </div>
+                              )}
+                              <div 
+                                className="w-8 h-8 rounded-full flex items-center justify-center mb-1" // Smaller icon container
+                                style={{ backgroundColor: voice.color }}
+                              >
+                                <VoiceIcon className="h-4 w-4 text-white" /> {/* Icon for voice */}
+                              </div>
+                              <div className="text-white font-medium text-xs">{voice.name}</div> {/* Smaller font */}
+                              <div className="text-gray-400 text-xs">{voice.description}</div> {/* Smaller font */}
+                            </label>
+                          </div>
+                        );
+                      })}
                     </RadioGroup>
                   </div>
 
                   <div className="mb-8">
-                    <h4 className="text-cyan-400 font-medium mb-6 text-lg">朗读模式</h4>
-                    <RadioGroup 
-                      value={readingMode} 
-                      onValueChange={(value: 'strict' | 'interpretive') => setReadingMode(value)}
-                      className="grid grid-cols-2 gap-4"
-                    >
-                      <div
-                        className={`relative cursor-pointer p-4 rounded-lg border transition-all ${
+                    <h4 className="text-cyan-400 font-medium mb-4 text-lg">朗读模式</h4> {/* Reduced mb from 6 to 4 */}
+                    <div className="flex gap-3"> {/* Use flex for side-by-side small buttons */}
+                      <Button
+                        onClick={() => setReadingMode('strict')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all ${
                           readingMode === 'strict'
-                            ? 'border-cyan-400 bg-cyan-400/10'
-                            : 'border-[#203042]/60 bg-[#0f1419] hover:bg-[#1a2740]'
+                            ? 'bg-cyan-600 hover:bg-cyan-700 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                         }`}
+                        size="sm" // Make them small
                       >
-                        <RadioGroupItem
-                          value="strict"
-                          id="mode-strict"
-                          className="absolute opacity-0"
-                        />
-                        <label
-                          htmlFor="mode-strict"
-                          className="flex flex-col items-center cursor-pointer"
-                        >
-                          {readingMode === 'strict' && (
-                            <div className="absolute -top-2 -right-2 bg-cyan-400 rounded-full">
-                              <CheckCircle2 className="h-4 w-4 text-white" />
-                            </div>
-                          )}
-                          <BookText className="h-8 w-8 text-white mb-2" />
-                          <div className="text-white font-medium text-sm">原文朗读</div>
-                          <div className="text-gray-400 text-xs text-center">严格按照输入文本朗读</div>
-                        </label>
-                      </div>
-                      <div
-                        className={`relative cursor-pointer p-4 rounded-lg border transition-all ${
+                        <BookText className="h-4 w-4" />
+                        原文朗读
+                      </Button>
+                      <Button
+                        onClick={() => setReadingMode('interpretive')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all ${
                           readingMode === 'interpretive'
-                            ? 'border-purple-400 bg-purple-400/10'
-                            : 'border-[#203042]/60 bg-[#0f1419] hover:bg-[#1a2740]'
+                            ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                         }`}
+                        size="sm" // Make them small
                       >
-                        <RadioGroupItem
-                          value="interpretive"
-                          id="mode-interpretive"
-                          className="absolute opacity-0"
-                        />
-                        <label
-                          htmlFor="mode-interpretive"
-                          className="flex flex-col items-center cursor-pointer"
-                        >
-                          {readingMode === 'interpretive' && (
-                            <div className="absolute -top-2 -right-2 bg-purple-400 rounded-full">
-                              <CheckCircle2 className="h-4 w-4 text-white" />
-                            </div>
-                          )}
-                          <Sparkles className="h-8 w-8 text-white mb-2" />
-                          <div className="text-white font-medium text-sm">智能演绎</div>
-                          <div className="text-gray-400 text-xs text-center">转换为自媒体口播风格</div>
-                        </label>
-                      </div>
-                    </RadioGroup>
+                        <Sparkles className="h-4 w-4" />
+                        智能演绎
+                      </Button>
+                    </div>
+                    <p className="text-gray-400 text-xs mt-2 text-center">
+                      {readingMode === 'strict' ? '严格按照输入文本朗读' : '转换为自媒体口播风格'}
+                    </p>
                   </div>
 
                   <div className="mb-8">
