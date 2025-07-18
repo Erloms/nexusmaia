@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast"; // Updated import
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, CreditCard, Settings, UserCheck, UserPlus, LayoutDashboard, Menu } from 'lucide-react';
 import Navigation from "@/components/Navigation";
+import PaymentConfig from '@/components/PaymentConfig'; // Import the new PaymentConfig component
 
 interface User {
   id: string;
@@ -41,17 +42,6 @@ const Admin = () => {
   const [activationIdentifier, setActivationIdentifier] = useState('');
   const [activationPlan, setActivationPlan] = useState<'annual' | 'lifetime'>('annual');
   
-  // 支付宝配置
-  const [alipayConfig, setAlipayConfig] = useState({
-    appId: '',
-    appKey: '',
-    publicKey: '',
-    returnUrl: '',
-    notifyUrl: '',
-    encryptionAlgo: 'RSA2',
-    environment: 'prod' as 'prod' | 'sandbox'
-  });
-
   useEffect(() => {
     // Load users from localStorage
     const savedUsers = localStorage.getItem('nexusAi_users');
@@ -100,12 +90,6 @@ const Admin = () => {
       ];
       setPaymentOrders(mockOrders);
       localStorage.setItem('nexusAi_payment_orders', JSON.stringify(mockOrders));
-    }
-
-    // Load Alipay config
-    const savedAlipayConfig = localStorage.getItem('nexusAi_alipay_config');
-    if (savedAlipayConfig) {
-      setAlipayConfig(JSON.parse(savedAlipayConfig));
     }
   }, []);
 
@@ -170,21 +154,6 @@ const Admin = () => {
       title: "成功",
       description: `已为 ${activationIdentifier} 开通${activationPlan === 'annual' ? '年' : '永久'}会员`,
     });
-  };
-
-  const handleSaveAlipayConfig = () => {
-    localStorage.setItem('nexusAi_alipay_config', JSON.stringify(alipayConfig));
-    toast({
-      title: "配置保存成功",
-      description: "支付宝配置已保存，支付功能已启用",
-    });
-  };
-
-  const handleAlipayConfigChange = (field: string, value: string) => {
-    setAlipayConfig(prev => ({
-      ...prev,
-      [field]: value
-    }));
   };
 
   const approvePayment = (orderId: string) => {
@@ -556,116 +525,7 @@ const Admin = () => {
 
           {/* 支付宝配置 */}
           {activeTab === 'alipay' && (
-            <Card className="bg-[#1a2740] border-[#203042]/60">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center">
-                  <Settings className="mr-2 h-5 w-5" />
-                  支付宝MCP配置
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="appId" className="text-white">应用ID (APPID)</Label>
-                      <Input
-                        id="appId"
-                        value={alipayConfig.appId}
-                        onChange={(e) => handleAlipayConfigChange('appId', e.target.value)}
-                        placeholder="支付宝开放平台应用ID"
-                        className="bg-[#14202c] border-[#2e4258] text-white"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="returnUrl" className="text-white">同步返回地址</Label>
-                      <Input
-                        id="returnUrl"
-                        value={alipayConfig.returnUrl}
-                        onChange={(e) => handleAlipayConfigChange('returnUrl', e.target.value)}
-                        placeholder="https://your-domain.com/success"
-                        className="bg-[#14202c] border-[#2e4258] text-white"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="notifyUrl" className="text-white">异步通知地址</Label>
-                      <Input
-                        id="notifyUrl"
-                        value={alipayConfig.notifyUrl}
-                        onChange={(e) => handleAlipayConfigChange('notifyUrl', e.target.value)}
-                        placeholder="https://your-server.com/notify"
-                        className="bg-[#14202c] border-[#2e4258] text-white"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="environment" className="text-white">环境</Label>
-                      <Select value={alipayConfig.environment} onValueChange={(value: 'prod' | 'sandbox') => handleAlipayConfigChange('environment', value)}>
-                        <SelectTrigger className="bg-[#14202c] border-[#2e4258] text-white">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="prod">生产环境</SelectItem>
-                          <SelectItem value="sandbox">沙箱环境</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="appKey" className="text-white">应用私钥</Label>
-                      <Textarea
-                        id="appKey"
-                        value={alipayConfig.appKey}
-                        onChange={(e) => handleAlipayConfigChange('appKey', e.target.value)}
-                        placeholder="MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC..."
-                        className="bg-[#14202c] border-[#2e4258] text-white min-h-[120px]"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="publicKey" className="text-white">支付宝公钥</Label>
-                      <Textarea
-                        id="publicKey"
-                        value={alipayConfig.publicKey}
-                        onChange={(e) => handleAlipayConfigChange('publicKey', e.target.value)}
-                        placeholder="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA..."
-                        className="bg-[#14202c] border-[#2e4258] text-white min-h-[120px]"
-                      />
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex justify-center">
-                  <Button onClick={handleSaveAlipayConfig} className="bg-cyan-600 hover:bg-cyan-700 text-white">
-                    <Settings className="h-4 w-4 mr-2" />
-                    保存配置
-                  </Button>
-                </div>
-                
-                <div className="border-t border-[#203042]/60 pt-4">
-                  <h3 className="text-lg font-bold text-cyan-400 mb-2">配置说明</h3>
-                  <div className="space-y-2 text-sm text-gray-400">
-                    <p>
-                      请先在支付宝开放平台创建应用并获取相关密钥信息。详细配置步骤请参考：
-                    </p>
-                    <a 
-                      href="https://opendocs.alipay.com/open/0go80l" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-cyan-400 hover:text-cyan-300 underline"
-                    >
-                      支付宝开放平台 MCP 服务文档
-                    </a>
-                    <p className="mt-4">
-                      <strong>重要提示：</strong>请妥善保管应用私钥，不要泄露给他人。配置完成后即可启用支付宝支付功能。
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <PaymentConfig /> // Use the new PaymentConfig component
           )}
         </div>
       </div>

@@ -280,6 +280,41 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_configs: {
+        Row: {
+          id: string;
+          alipay_app_id: string;
+          alipay_private_key: string;
+          alipay_public_key: string;
+          alipay_gateway_url: string;
+          notify_url: string;
+          return_url: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          alipay_app_id: string;
+          alipay_private_key: string;
+          alipay_public_key: string;
+          alipay_gateway_url?: string;
+          notify_url: string;
+          return_url: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          alipay_app_id?: string;
+          alipay_private_key?: string;
+          alipay_public_key?: string;
+          alipay_gateway_url?: string;
+          notify_url?: string;
+          return_url?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       payment_orders: {
         Row: {
           amount: number
