@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { Palette, Sparkles, Download, ChevronLeft, ChevronRight, Play, Pause } from 'lucide-react';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, CarouselApi } from "@/components/ui/carousel";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 const ImageShowcase = () => {
   const { toast } = useToast();

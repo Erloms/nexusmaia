@@ -1,8 +1,8 @@
-
 import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Mic, MicOff, Image as ImageIcon, Shuffle } from "lucide-react";
+import { useToast } from "@/hooks/use-toast"; // Updated import
 
 interface Message {
   text: string;
@@ -39,6 +39,7 @@ const ChatMain: React.FC<ChatMainProps> = ({
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const { toast } = useToast(); // Initialize useToast
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -67,6 +68,10 @@ const ChatMain: React.FC<ChatMainProps> = ({
   const switchRandomModel = () => {
     const randomModel = AI_MODELS[Math.floor(Math.random() * AI_MODELS.length)];
     onModelChange(randomModel.id);
+    toast({
+      title: "模型已切换",
+      description: `已切换到：${randomModel.name}`,
+    });
   };
 
   // 生成配图
@@ -90,6 +95,11 @@ const ChatMain: React.FC<ChatMainProps> = ({
       return imageMessage;
     } catch (error) {
       console.error('生成图像失败:', error);
+      toast({
+        title: "生成失败",
+        description: "图像生成过程中出现错误，请稍后重试",
+        variant: "destructive"
+      });
     } finally {
       setIsGeneratingImage(false);
     }

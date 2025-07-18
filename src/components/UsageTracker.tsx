@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Progress } from "@/components/ui/progress";
 import { MessageSquare, Image, Volume2, Crown, ArrowUpRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from "@/components/ui/button";
 import { useNavigate } from 'react-router-dom';
+import { useToast } from "@/hooks/use-toast"; // Updated import
 
 interface UsageStats {
   chat: { used: number; total: number };
@@ -19,6 +19,7 @@ interface UsageTrackerProps {
 const UsageTracker = ({ onUsageUpdate }: UsageTrackerProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast(); // Initialize useToast
   const [usage, setUsage] = useState<UsageStats>({
     chat: { used: 0, total: 10 },
     image: { used: 0, total: 10 },
@@ -123,7 +124,7 @@ const UsageTracker = ({ onUsageUpdate }: UsageTrackerProps) => {
 
         {/* AI图像额度 */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center">
             <div className="flex items-center">
               <Image className="h-4 w-4 text-nexus-cyan mr-2" />
               <span className="text-white text-sm">AI图像额度</span>

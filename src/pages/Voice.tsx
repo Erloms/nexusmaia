@@ -11,7 +11,7 @@ import {
   Sparkles, // For interpretive reading
   User, Mic, Speaker, Feather, Smile, Music, Heart, Star, Sun, Cloud, Gift, Bell, Camera, Film // Additional icons
 } from 'lucide-react';
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast"; // Updated import
 import { useNavigate } from "react-router-dom";
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from "@/components/ui/card";
@@ -147,15 +147,37 @@ const Voice = () => {
     setAudioUrl(null); // Clear previous audio
 
     try {
-      let promptForApi = text;
-      if (readingMode === 'strict') {
-        promptForApi = `请朗读以下文本：${text}`; // Explicitly ask to read
-      } else { // interpretive mode
-        promptForApi = `请将以下文本转换为自媒体口播风格，并朗读：${text}`; // Ask for rephrasing then reading
+      let finalPromptForAudio = text; // This will be the text actually sent to the audio API
+
+      if (readingMode === 'interpretive') {
+          // Step 1: Call an LLM to rephrase the text
+          toast({
+              title: "正在智能演绎文本...",
+              description: "这可能需要一些时间，请稍候。",
+              variant: "info"
+          });
+          const rephrasePrompt = `请将以下文本转换为自媒体口播风格，使其更生动、吸引人，不要以对话形式回复，直接给出转换后的文本：${text}`;
+          const rephraseUrl = `https://text.pollinations.ai/${encodeURIComponent(rephrasePrompt)}?model=openai&nologo=true`; // Using a general LLM model
+
+          const rephraseResponse = await fetch(rephraseUrl);
+          if (!rephraseResponse.ok) {
+              throw new Error(`文本演绎失败: ${rephraseResponse.status} - ${await rephraseResponse.text()}`);
+          }
+          const rephrasedText = await rephraseResponse.text();
+          finalPromptForAudio = rephrasedText.trim();
+
+          toast({
+              title: "文本已智能演绎",
+              description: "正在将演绎后的文本转换为语音...",
+              variant: "default"
+          });
+
+      } else { // strict mode
+          finalPromptForAudio = `请朗读以下文本：${text}`; // Explicitly ask to read
       }
 
-      // Use the selectedVoice ID directly in the URL
-      const url = `https://text.pollinations.ai/${encodeURIComponent(promptForApi)}?model=openai-audio&voice=${selectedVoice}&nologo=true`;
+      // Step 2: Generate audio from the finalPromptForAudio
+      const url = `https://text.pollinations.ai/${encodeURIComponent(finalPromptForAudio)}?model=openai-audio&voice=${selectedVoice}&nologo=true`;
       
       // Simulate loading delay for better UX
       await new Promise(resolve => setTimeout(resolve, 1500));
@@ -178,11 +200,11 @@ const Voice = () => {
         description: "您的文本已成功转换为语音",
         variant: "default",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating audio:', error);
       toast({
         title: "生成失败",
-        description: "语音生成过程中发生错误，请稍后再试",
+        description: error.message || "语音生成过程中发生错误，请稍后再试",
         variant: "destructive",
       });
     } finally {
@@ -242,14 +264,14 @@ const Voice = () => {
                     <RadioGroup 
                       value={selectedVoice} 
                       onValueChange={setSelectedVoice}
-                      className="grid grid-cols-5 gap-3" // Changed to grid-cols-5, reduced gap
+                      className="grid grid-cols-5 gap-3"
                     >
                       {voiceOptions.map((voice, index) => {
                         const VoiceIcon = getVoiceIcon(index);
                         return (
                           <div
                             key={voice.id}
-                            className={`relative cursor-pointer p-2 rounded-lg border transition-all ${ // Reduced padding
+                            className={`relative cursor-pointer p-2 rounded-lg border transition-all ${
                               selectedVoice === voice.id
                                 ? 'border-cyan-400 bg-cyan-400/10'
                                 : 'border-[#203042]/60 bg-[#0f1419] hover:bg-[#1a2740]'
@@ -270,13 +292,13 @@ const Voice = () => {
                                 </div>
                               )}
                               <div 
-                                className="w-8 h-8 rounded-full flex items-center justify-center mb-1" // Smaller icon container
+                                className="w-8 h-8 rounded-full flex items-center justify-center mb-1"
                                 style={{ backgroundColor: voice.color }}
                               >
-                                <VoiceIcon className="h-4 w-4 text-white" /> {/* Icon for voice */}
+                                <VoiceIcon className="h-4 w-4 text-white" />
                               </div>
-                              <div className="text-white font-medium text-xs">{voice.name}</div> {/* Smaller font */}
-                              <div className="text-gray-400 text-xs">{voice.description}</div> {/* Smaller font */}
+                              <div className="text-white font-medium text-xs">{voice.name}</div>
+                              <div className="text-gray-400 text-xs">{voice.description}</div>
                             </label>
                           </div>
                         );
@@ -285,8 +307,8 @@ const Voice = () => {
                   </div>
 
                   <div className="mb-8">
-                    <h4 className="text-cyan-400 font-medium mb-4 text-lg">朗读模式</h4> {/* Reduced mb from 6 to 4 */}
-                    <div className="flex gap-3"> {/* Use flex for side-by-side small buttons */}
+                    <h4 className="text-cyan-400 font-medium mb-4 text-lg">朗读模式</h4>
+                    <div className="flex gap-3">
                       <Button
                         onClick={() => setReadingMode('strict')}
                         className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all ${
@@ -294,7 +316,7 @@ const Voice = () => {
                             ? 'bg-cyan-600 hover:bg-cyan-700 text-white'
                             : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                         }`}
-                        size="sm" // Make them small
+                        size="sm"
                       >
                         <BookText className="h-4 w-4" />
                         原文朗读
@@ -306,7 +328,7 @@ const Voice = () => {
                             ? 'bg-purple-600 hover:bg-purple-700 text-white'
                             : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                         }`}
-                        size="sm" // Make them small
+                        size="sm"
                       >
                         <Sparkles className="h-4 w-4" />
                         智能演绎

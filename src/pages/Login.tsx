@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
-import { useToast } from "@/components/ui/use-toast"; // Import useToast
+import { useToast } from "@/hooks/use-toast"; // Updated import
 
 const Login = () => {
   const { login, loading } = useAuth();
