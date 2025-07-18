@@ -1,5 +1,8 @@
-
+/// <reference types="https://deno.land/std@0.168.0/lib.deno.d.ts" />
+// @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// @ts-ignore
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,7 +27,11 @@ serve(async (req) => {
       )
     }
 
-    const API_KEY = "924d10ce4718479a9a089ffdc62aafff.d69Or12B5PEdYUco"
+    // 从 Supabase Secrets 中获取 API Key
+    const API_KEY = Deno.env.get('VIDEO_API_KEY');
+    if (!API_KEY) {
+      throw new Error('VIDEO_API_KEY is not set in Supabase secrets.');
+    }
     
     // Create video generation request
     const requestBody: any = {
