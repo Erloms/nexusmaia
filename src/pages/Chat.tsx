@@ -47,6 +47,11 @@ const Chat = () => {
     { id: "agentica-org/deepcoder-14b-preview:free", name: "DeepCoder 14B" },
     { id: "meta-llama/llama-4-maverick:free", name: "Llama 4 Maverick" },
     { id: "moonshotai/kimi-dev-72b:free", name: "Kimi Dev 72B" },
+    // 新增模型
+    { id: "qwen/qwen3-30b-a3b:free", name: "Qwen 3 30B" },
+    { id: "tencent/hunyuan-a13b-instruct:free", name: "Hunyuan A13B Instruct" },
+    { id: "google/gemini-2.0-flash-exp:free", name: "Gemini 2.0 Flash Exp" },
+    { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B Instruct" },
   ];
 
   // AI智能体列表
@@ -283,7 +288,7 @@ const Chat = () => {
 爆款增强包 ✅ 标题优化器：自动生成10条带emoji的变体 ✅ 标签策略：按内容匹配三级标签） ✅ 发布时间建议：根据历史数据推荐**${topic || '用户输入的主题'}**流量高峰时段
         `;
       } else if (agentId === 'code-generator') {
-        aiResponse = `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那C数列的函数。”`;
+        aiResponse = `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那契数列的函数。”`;
       } else if (agentId === 'resume-optimizer') {
         aiResponse = `您选择了简历优化师。请粘贴您的简历内容，或者告诉我您的目标职位和主要经历，我将为您提供优化建议。`;
       } else if (agentId === 'mental-wellness-assistant') {
