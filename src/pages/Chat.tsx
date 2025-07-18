@@ -46,6 +46,9 @@ const Chat = () => {
     { id: "business-analyst", name: "商业数据分析师", group: "商业智能", description: "洞察市场趋势，辅助决策" },
     { id: "personal-trainer", name: "智能健身教练", group: "生活助手", description: "定制专属健身计划" },
     { id: "travel-planner", name: "全球旅行规划师", group: "生活助手", description: "个性化行程安排" },
+    { id: "code-generator", name: "代码生成器", group: "开发工具", description: "快速生成代码片段或完整程序" },
+    { id: "resume-optimizer", name: "简历优化师", group: "职业发展", description: "优化简历，提升面试机会" },
+    { id: "mental-wellness-assistant", name: "心理咨询助手", group: "生活助手", description: "提供情绪支持和心理建议" },
   ];
 
   const scrollToBottom = () => {
@@ -196,9 +199,29 @@ const Chat = () => {
 根据文案自动生成4图组合：
 爆款增强包 ✅ 标题优化器：自动生成10条带emoji的变体 ✅ 标签策略：按内容匹配三级标签） ✅ 发布时间建议：根据历史数据推荐**${topic || '用户输入的主题'}**流量高峰时段
         `;
+      } else if (agentId === 'code-generator') {
+        aiResponse = `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那契数列的函数。”`;
+      } else if (agentId === 'resume-optimizer') {
+        aiResponse = `您选择了简历优化师。请粘贴您的简历内容，或者告诉我您的目标职位和主要经历，我将为您提供优化建议。`;
+      } else if (agentId === 'mental-wellness-assistant') {
+        aiResponse = `您选择了心理咨询助手。请告诉我您现在的心情或遇到的困扰，我将尽力为您提供支持和一些建议。请注意，我无法替代专业的心理医生。`;
+      } else if (agentId === 'business-analyst') {
+        aiResponse = `您选择了商业数据分析师。目前我只能基于您提供的文本信息进行模拟分析。请描述您想分析的数据类型和问题，例如：“分析一下过去一年销售额的增长趋势。”`;
       } else {
-        // For other agents, use a generic response
-        aiResponse = `您选择了 ${aiAgents.find(a => a.id === agentId)?.name} 智能体。请告诉我您的具体需求，我将为您提供帮助。`;
+        // For other agents, use a generic response or existing Pollinations.ai text API
+        const encodedPrompt = encodeURIComponent(prompt);
+        const apiUrl = `https://text.pollinations.ai/${encodedPrompt}?model=openai-audio&nologo=true`; // Using a generic text model for simulation
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+          throw new Error(`API响应错误: ${response.status}`);
+        }
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          aiResponse += decoder.decode(value, { stream: true });
+        }
       }
 
       // 模拟加载延迟
