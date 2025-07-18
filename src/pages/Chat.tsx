@@ -5,7 +5,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from '@/contexts/AuthContext';
 import Navigation from '@/components/Navigation';
 import ChatSidebar from '@/components/ChatSidebar';
-import { Send, Crown } from 'lucide-react';
+import { Send, Crown, MessageSquare, Bot, Sparkles, Wand2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface Message {
@@ -22,8 +22,21 @@ const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState('xiaohongshu-strategist'); // Changed to selectedAgent
+  const [selectedModel, setSelectedModel] = useState('openai'); // For general text generation
+  const [selectedAgent, setSelectedAgent] = useState('xiaohongshu-strategist'); // For specialized agents
+  const [chatMode, setChatMode] = useState<'general' | 'agent'>('general'); // 'general' or 'agent'
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // AI大模型列表 (Pollinations.ai 兼容)
+  const aiTextModels = [
+    { id: "openai", name: "OpenAI GPT-4o-mini", group: "OpenAI" },
+    { id: "llama", name: "Llama 3.3 70B", group: "Meta" },
+    { id: "mistral", name: "Mistral Nemo", group: "Mistral" },
+    { id: "deepseek", name: "DeepSeek-V3", group: "DeepSeek" },
+    { id: "deepseek-r1", name: "DeepSeek-R1 Distill Qwen 32B", group: "DeepSeek" },
+    { id: "phi", name: "Phi-4 Multimodal Instruct", group: "Microsoft" },
+    { id: "qwen-coder", name: "Qwen 2.5 Coder 32B", group: "Qwen" }
+  ];
 
   // AI智能体列表
   const aiAgents = [
@@ -43,7 +56,55 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  // 模拟调用智能体API
+  // 通用文本生成API调用
+  const callTextAPI = async (prompt: string, modelId: string) => {
+    try {
+      setIsLoading(true);
+      
+      const encodedPrompt = encodeURIComponent(prompt);
+      const apiUrl = `https://text.pollinations.ai/${encodedPrompt}?model=${modelId}`;
+      
+      const response = await fetch(apiUrl);
+      if (!response.ok) {
+        throw new Error(`API响应错误: ${response.status}`);
+      }
+      
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        aiResponse += chunk;
+        
+        setMessages(prev => {
+          const newMessages = [...prev];
+          if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'assistant' && newMessages[newMessages.length - 1].content === '') {
+            newMessages[newMessages.length - 1].content = aiResponse;
+          } else {
+            newMessages.push({ id: Date.now().toString(), role: 'assistant', content: aiResponse, timestamp: new Date() });
+          }
+          return newMessages;
+        });
+      }
+      
+      return aiResponse;
+    } catch (error) {
+      console.error("API调用错误:", error);
+      toast({
+        title: "模型调用失败",
+        description: "请重试或切换其他模型",
+        variant: "destructive"
+      });
+      return "抱歉，我在处理您的请求时遇到了问题。请稍后再试。";
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 模拟智能体API调用
   const callAgentAPI = async (prompt: string, agentId: string) => {
     try {
       setIsLoading(true);
@@ -100,7 +161,7 @@ const Chat = () => {
 [正文]
 是不是总觉得自己不够好，笔记没人看？我懂你！曾经我也深陷这种情绪，直到我学会了这几招，瞬间被治愈！
 1. **治愈：** “生活再难，也要给自己一点甜，小红书就是我的精神角落。”
-2. **共情：** “你不是一个人在战斗，我们都在努力变好！”
+2. **共情：：** “你不是一个人在战斗，我们都在努力变好！”
 3. **鼓励：** “相信自己，你的每一次分享都值得被看见！”
 4. **温暖：** “愿你的小红书，成为你温暖的避风港。”
 [配图]
@@ -136,20 +197,8 @@ const Chat = () => {
 爆款增强包 ✅ 标题优化器：自动生成10条带emoji的变体 ✅ 标签策略：按内容匹配三级标签） ✅ 发布时间建议：根据历史数据推荐**${topic || '用户输入的主题'}**流量高峰时段
         `;
       } else {
-        // For other agents, use a generic response or existing Pollinations.ai text API
-        const encodedPrompt = encodeURIComponent(prompt);
-        const apiUrl = `https://text.pollinations.ai/${encodedPrompt}?model=openai-audio&nologo=true`; // Using a generic text model for simulation
-        const response = await fetch(apiUrl);
-        if (!response.ok) {
-          throw new Error(`API响应错误: ${response.status}`);
-        }
-        const reader = response.body!.getReader();
-        const decoder = new TextDecoder();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          aiResponse += decoder.decode(value, { stream: true });
-        }
+        // For other agents, use a generic response
+        aiResponse = `您选择了 ${aiAgents.find(a => a.id === agentId)?.name} 智能体。请告诉我您的具体需求，我将为您提供帮助。`;
       }
 
       // 模拟加载延迟
@@ -202,8 +251,12 @@ const Chat = () => {
       };
       setMessages(prev => [...prev, aiMessage]);
 
-      // 调用智能体API
-      const responseContent = await callAgentAPI(currentInput, selectedAgent);
+      let responseContent = '';
+      if (chatMode === 'general') {
+        responseContent = await callTextAPI(currentInput, selectedModel);
+      } else { // chatMode === 'agent'
+        responseContent = await callAgentAPI(currentInput, selectedAgent);
+      }
 
       // 更新AI消息内容
       setMessages(prev => {
@@ -223,7 +276,9 @@ const Chat = () => {
           timestamp: new Date().toISOString(),
           preview: currentInput.slice(0, 100),
           messages: [...messages, userMessage, { ...aiMessage, content: responseContent }], // Include all messages
-          agent: selectedAgent // Save selected agent
+          model: selectedModel, // Save selected model
+          agent: selectedAgent, // Save selected agent
+          mode: chatMode // Save chat mode
         };
 
         const existingHistory = JSON.parse(localStorage.getItem(`chat_history_${user.id}`) || '[]');
@@ -249,6 +304,9 @@ const Chat = () => {
 
   const handleNewChat = () => {
     setMessages([]);
+    setChatMode('general'); // Reset to general mode for new chat
+    setSelectedModel('openai'); // Reset to default model
+    setSelectedAgent('xiaohongshu-strategist'); // Reset to default agent
   };
 
   const handleLoadHistory = (historyId: string) => {
@@ -257,7 +315,9 @@ const Chat = () => {
       const historyItem = existingHistory.find((item: any) => item.id === historyId);
       if (historyItem && historyItem.messages) {
         setMessages(historyItem.messages);
-        setSelectedAgent(historyItem.agent || 'xiaohongshu-strategist'); // Load selected agent
+        setSelectedModel(historyItem.model || 'openai');
+        setSelectedAgent(historyItem.agent || 'xiaohongshu-strategist');
+        setChatMode(historyItem.mode || 'general');
       }
     }
   };
@@ -270,11 +330,11 @@ const Chat = () => {
         {/* 左侧边栏 */}
         <div className="w-80 flex-shrink-0">
           <ChatSidebar 
-            onModelChange={setSelectedAgent} // Changed to setSelectedAgent
-            selectedModel={selectedAgent} // Changed to selectedAgent
+            onModelChange={setSelectedModel} // Controls selectedModel for general chat
+            selectedModel={selectedModel}
             onLoadHistory={handleLoadHistory}
             onNewChat={handleNewChat}
-            aiModels={aiAgents} // Changed to aiAgents
+            aiModels={aiTextModels} // Only pass text models here
           />
         </div>
 
@@ -297,18 +357,18 @@ const Chat = () => {
             </div>
           )}
 
-          {/* 智能体选择提示 */}
+          {/* 模式/智能体/模型选择提示 */}
           {hasPermission('chat') && (
             <div className="bg-[#1a2740]/50 border-b border-[#203042]/30 p-3">
               <div className="max-w-4xl mx-auto flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-400">当前智能体:</span>
+                  <span className="text-sm text-gray-400">当前模式:</span>
                   <span className="text-sm text-cyan-400 font-medium">
-                    {aiAgents.find(m => m.id === selectedAgent)?.name || '未知智能体'}
+                    {chatMode === 'general' ? `通用对话 (${aiTextModels.find(m => m.id === selectedModel)?.name})` : `智能体 (${aiAgents.find(a => a.id === selectedAgent)?.name})`}
                   </span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  支持 {aiAgents.length} 个AI智能体
+                  {chatMode === 'general' ? `支持 ${aiTextModels.length} 个AI大模型` : `支持 ${aiAgents.length} 个AI智能体`}
                 </div>
               </div>
             </div>
@@ -323,23 +383,42 @@ const Chat = () => {
                     <span className="text-2xl">🤖</span>
                   </div>
                   <h2 className="text-3xl font-bold text-white mb-4">开始对话</h2>
-                  <p className="text-gray-400 text-lg">选择一个AI智能体，开始您的智能对话之旅</p>
-                  <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-3 max-w-2xl mx-auto">
-                    {aiAgents.slice(0, 6).map((agent) => (
-                      <div 
-                        key={agent.id}
-                        className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                          selectedAgent === agent.id 
-                            ? 'border-cyan-400 bg-cyan-400/10' 
-                            : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
-                        }`}
-                        onClick={() => setSelectedAgent(agent.id)}
-                      >
-                        <div className="text-sm font-medium text-white">{agent.name}</div>
-                        <div className="text-xs text-gray-400 mt-1">{agent.group}</div>
-                      </div>
-                    ))}
+                  <p className="text-gray-400 text-lg">选择一个模式，开始您的智能对话之旅</p>
+                  <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                    <Button
+                      className={`py-4 text-lg font-medium ${chatMode === 'general' ? 'bg-cyan-600 hover:bg-cyan-700' : 'bg-gray-700 hover:bg-gray-600'}`}
+                      onClick={() => setChatMode('general')}
+                    >
+                      <MessageSquare className="mr-2 h-5 w-5" />
+                      通用对话
+                    </Button>
+                    <Button
+                      className={`py-4 text-lg font-medium ${chatMode === 'agent' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-gray-700 hover:bg-gray-600'}`}
+                      onClick={() => setChatMode('agent')}
+                    >
+                      <Wand2 className="mr-2 h-5 w-5" />
+                      智能体模式
+                    </Button>
                   </div>
+
+                  {chatMode === 'agent' && (
+                    <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-3 max-w-2xl mx-auto">
+                      {aiAgents.map((agent) => (
+                        <div 
+                          key={agent.id}
+                          className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                            selectedAgent === agent.id 
+                              ? 'border-cyan-400 bg-cyan-400/10' 
+                              : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                          }`}
+                          onClick={() => setSelectedAgent(agent.id)}
+                        >
+                          <div className="text-sm font-medium text-white">{agent.name}</div>
+                          <div className="text-xs text-gray-400 mt-1">{agent.group}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-6">

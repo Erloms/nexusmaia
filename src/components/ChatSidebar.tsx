@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { MessageSquare, Trash2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ interface ChatSidebarProps {
   selectedModel: string;
   onLoadHistory?: (historyId: string) => void;
   onNewChat?: () => void;
-  aiModels: {
+  aiModels: { // Now specifically for text models
     id: string;
     name: string;
     group?: string;
@@ -28,7 +27,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   selectedModel,
   onLoadHistory,
   onNewChat,
-  aiModels,
+  aiModels, // Renamed from aiAgents to aiModels for clarity in this component
 }) => {
   const { user } = useAuth();
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
