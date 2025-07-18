@@ -169,11 +169,11 @@ const Voice = () => {
     setLoading(true);
     setAudioUrl(null); // Clear previous audio
 
-    try {
-      let audioGenerationPrompt = text; // Start with original text for both modes
-      let generatedAudioUrl: string | null = null; // Declare generatedAudioUrl here
-      let rephrasedContent: string | undefined = undefined; // No rephrased content for these modes
+    let audioGenerationPrompt = text; // This will be the text actually sent to the audio API
+    let generatedAudioUrl: string | null = null; // Declared here at the top of the function
+    let rephrasedContent: string | undefined = undefined; // No rephrased content for these modes
 
+    try {
       if (selectedVoice === 'browser-native') {
         // Use Web Speech API
         if ('speechSynthesis' in window) {
