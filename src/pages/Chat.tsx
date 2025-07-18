@@ -22,7 +22,7 @@ const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('openai'); // For general text generation
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini'); // For general text generation
   const [selectedAgent, setSelectedAgent] = useState('xiaohongshu-strategist'); // For specialized agents
   const [chatMode, setChatMode] = useState<'general' | 'agent'>('general'); // 'general' or 'agent'
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -30,24 +30,23 @@ const Chat = () => {
   // OpenRouter API Key (In a real application, this should be an environment variable or managed securely)
   const OPENROUTER_API_KEY = "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"; // Updated API Key
 
-  // AI大模型列表 (Pollinations.ai 和 OpenRouter 兼容)
+  // AI大模型列表 (移除来源信息)
   const aiTextModels = [
-    // Pollinations.ai models
-    { id: "openai", name: "OpenAI GPT-4o-mini", group: "OpenAI", apiProvider: "pollinations" },
-    { id: "llama", name: "Llama 3.3 70B", group: "Meta", apiProvider: "pollinations" },
-    { id: "mistral", name: "Mistral Nemo", group: "Mistral", apiProvider: "pollinations" },
-    { id: "deepseek", name: "DeepSeek-V3", group: "DeepSeek", apiProvider: "pollinations" },
-    { id: "deepseek-r1", name: "DeepSeek-R1 Distill Qwen 32B", group: "DeepSeek", apiProvider: "pollinations" },
-    { id: "phi", name: "Phi-4 Multimodal Instruct", group: "Microsoft", apiProvider: "pollinations" },
-    { id: "qwen-coder", name: "Qwen 2.5 Coder 32B", group: "Qwen", apiProvider: "pollinations" },
-    // OpenRouter models (Free tier models as of user's request)
-    { id: "google/gemma-3n-e4b-it:free", name: "Gemma 3n 4B", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "qwen/qwen3-235b-a22b:free", name: "Qwen 3 235B", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "deepseek/deepseek-r1:free", name: "DeepSeek R1", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "deepseek/deepseek-chat-v3-0324:free", name: "DeepSeek v3", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "agentica-org/deepcoder-14b-preview:free", name: "DeepCoder 14B", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "meta-llama/llama-4-maverick:free", name: "Llama 4 Maverick", group: "OpenRouter", apiProvider: "openrouter" },
-    { id: "moonshotai/kimi-dev-72b:free", name: "Kimi Dev 72B", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "gpt-4o-mini", name: "GPT-4o-mini" },
+    { id: "llama", name: "Llama 3.3 70B" },
+    { id: "mistral", name: "Mistral Nemo" },
+    { id: "deepseek", name: "DeepSeek-V3" },
+    { id: "deepseek-r1", name: "DeepSeek-R1 Distill Qwen 32B" },
+    { id: "phi", name: "Phi-4 Multimodal Instruct" },
+    { id: "qwen-coder", name: "Qwen 2.5 Coder 32B" },
+    // OpenRouter models (通过ID格式区分，不显示来源)
+    { id: "google/gemma-3n-e4b-it:free", name: "Gemma 3n 4B" },
+    { id: "qwen/qwen3-235b-a22b:free", name: "Qwen 3 235B" },
+    { id: "deepseek/deepseek-r1:free", name: "DeepSeek R1" },
+    { id: "deepseek/deepseek-chat-v3-0324:free", name: "DeepSeek v3" },
+    { id: "agentica-org/deepcoder-14b-preview:free", name: "DeepCoder 14B" },
+    { id: "meta-llama/llama-4-maverick:free", name: "Llama 4 Maverick" },
+    { id: "moonshotai/kimi-dev-72b:free", name: "Kimi Dev 72B" },
   ];
 
   // AI智能体列表
@@ -81,7 +80,10 @@ const Chat = () => {
 
     let aiResponse = '';
     try {
-      if (selectedModelConfig.apiProvider === 'pollinations') {
+      // 根据 modelId 的格式判断是 Pollinations.ai 还是 OpenRouter 模型
+      const isPollinationsModel = !modelId.includes('/'); // Pollinations models typically don't have '/' in their ID
+      
+      if (isPollinationsModel) {
         const encodedPrompt = encodeURIComponent(prompt);
         const apiUrl = `https://text.pollinations.ai/${encodedPrompt}?model=${modelId}`;
         
@@ -98,13 +100,10 @@ const Chat = () => {
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
           
-          // Pollinations.ai streaming sends full messages, not deltas
-          // So we replace the content with the new chunk
           aiResponse = chunk; // Overwrite with the latest chunk
           
           setMessages(prev => {
             const newMessages = [...prev];
-            // Find the last assistant message and update its content
             let lastAssistantMessageIndex = -1;
             for (let i = newMessages.length - 1; i >= 0; i--) {
               if (newMessages[i].role === 'assistant') {
@@ -115,13 +114,12 @@ const Chat = () => {
             if (lastAssistantMessageIndex !== -1) {
               newMessages[lastAssistantMessageIndex].content = aiResponse;
             } else {
-              // This case should ideally not happen if a placeholder was added, but as a fallback
               newMessages.push({ id: Date.now().toString(), role: 'assistant', content: aiResponse, timestamp: new Date() });
             }
             return newMessages;
           });
         }
-      } else if (selectedModelConfig.apiProvider === 'openrouter') {
+      } else { // Assume OpenRouter model if it contains '/'
         const openRouterApiUrl = "https://openrouter.ai/api/v1/chat/completions";
         const response = await fetch(openRouterApiUrl, {
           method: "POST",
@@ -149,7 +147,6 @@ const Chat = () => {
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
           
-          // OpenRouter streaming sends multiple JSON objects, each prefixed with "data: "
           chunk.split('\n').forEach(line => {
             if (line.startsWith('data: ')) {
               const jsonStr = line.substring(6);
@@ -162,15 +159,10 @@ const Chat = () => {
                   aiResponse += data.choices[0].delta.content;
                   setMessages(prev => {
                     const newMessages = [...prev];
-                    // Update the last message if it's the AI's and empty, otherwise add a new one
                     const lastMsg = newMessages[newMessages.length - 1];
                     if (lastMsg && lastMsg.role === 'assistant') {
                       lastMsg.content = aiResponse;
                     } else {
-                      // This case might happen if the first chunk is not empty, or if a new message needs to be added
-                      // To avoid duplicate messages, we should ensure we're only updating the *current* AI response.
-                      // A more robust solution might involve tracking the AI message ID.
-                      // For now, we'll assume the last message is the one being built.
                       newMessages.push({ id: Date.now().toString(), role: 'assistant', content: aiResponse, timestamp: new Date() });
                     }
                     return newMessages;
@@ -291,7 +283,7 @@ const Chat = () => {
 爆款增强包 ✅ 标题优化器：自动生成10条带emoji的变体 ✅ 标签策略：按内容匹配三级标签） ✅ 发布时间建议：根据历史数据推荐**${topic || '用户输入的主题'}**流量高峰时段
         `;
       } else if (agentId === 'code-generator') {
-        aiResponse = `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那契数列的函数。”`;
+        aiResponse = `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那C数列的函数。”`;
       } else if (agentId === 'resume-optimizer') {
         aiResponse = `您选择了简历优化师。请粘贴您的简历内容，或者告诉我您的目标职位和主要经历，我将为您提供优化建议。`;
       } else if (agentId === 'mental-wellness-assistant') {
@@ -425,7 +417,7 @@ const Chat = () => {
   const handleNewChat = () => {
     setMessages([]);
     setChatMode('general'); // Reset to general mode for new chat
-    setSelectedModel('openai'); // Reset to default model
+    setSelectedModel('gpt-4o-mini'); // Reset to default model
     setSelectedAgent('xiaohongshu-strategist'); // Reset to default agent
   };
 
@@ -434,13 +426,12 @@ const Chat = () => {
       const existingHistory = JSON.parse(localStorage.getItem(`chat_history_${user.id}`) || '[]');
       const historyItem = existingHistory.find((item: any) => item.id === historyId);
       if (historyItem && historyItem.messages) {
-        // Convert timestamp strings back to Date objects
         const loadedMessages = historyItem.messages.map((msg: Message) => ({
           ...msg,
           timestamp: new Date(msg.timestamp)
         }));
         setMessages(loadedMessages);
-        setSelectedModel(historyItem.model || 'openai');
+        setSelectedModel(historyItem.model || 'gpt-4o-mini');
         setSelectedAgent(historyItem.agent || 'xiaohongshu-strategist');
         setChatMode(historyItem.mode || 'general');
       }
