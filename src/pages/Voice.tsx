@@ -11,7 +11,7 @@ import {
   Sparkles, // For interpretive reading
   User, Mic, Speaker, Feather, Smile, Music, Heart, Star, Sun, Cloud, Gift, Bell, Camera, Film // Additional icons
 } from 'lucide-react';
-import { useToast } from "@/hooks/use-toast"; // Updated import
+import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from "@/components/ui/card";
@@ -60,7 +60,7 @@ const Voice = () => {
     return color;
   };
 
-  // Voice options - expanded to 19 options with English IDs
+  // Voice options - expanded to 20 options with English IDs, including Web Speech API
   const voiceOptions: VoiceOption[] = [
     { id: 'alloy', name: 'Alloy', description: '平衡中性', color: stringToColor('alloy') },
     { id: 'echo', name: 'Echo', description: '深沉有力', color: stringToColor('echo') },
@@ -81,6 +81,7 @@ const Voice = () => {
     { id: 'elan', name: 'Elan', description: '优雅流利', color: stringToColor('elan') },
     { id: 'marilyn', name: 'Marilyn', description: '甜美悦耳', color: stringToColor('marilyn') },
     { id: 'meadow', name: 'Meadow', description: '清新宁静', color: stringToColor('meadow') },
+    { id: 'browser-native', name: '系统默认', description: '浏览器内置', color: stringToColor('browser-native') }, // New 20th voice
   ];
 
   // A selection of icons to cycle through for voice options
@@ -148,58 +149,87 @@ const Voice = () => {
 
     try {
       let finalPromptForAudio = text; // This will be the text actually sent to the audio API
+      let generatedAudioUrl: string | null = null;
 
-      if (readingMode === 'interpretive') {
-          // Step 1: Call an LLM to rephrase the text
+      if (selectedVoice === 'browser-native') {
+        // Use Web Speech API
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(text);
+          // Optional: Set language, voice, pitch, rate
+          utterance.lang = 'zh-CN'; // Chinese language
+          // You can try to find a specific voice if needed:
+          // const voices = window.speechSynthesis.getVoices();
+          // utterance.voice = voices.find(voice => voice.lang === 'zh-CN' && voice.name === 'Google 普通话（中国大陆）') || null;
+          
+          // Web Speech API doesn't provide a direct URL for the generated audio.
+          // We'll simulate it or leave it null for now, as it plays directly.
+          // For history, we'll just store that it was browser-native.
+          window.speechSynthesis.speak(utterance);
+          generatedAudioUrl = null; // No direct URL for browser synthesis
           toast({
-              title: "正在智能演绎文本...",
-              description: "这可能需要一些时间，请稍候。",
-              variant: "info"
+            title: "语音播放中",
+            description: "正在使用浏览器内置语音合成",
+            variant: "default",
           });
-          const rephrasePrompt = `请将以下文本转换为自媒体口播风格，使其更生动、吸引人，不要以对话形式回复，直接给出转换后的文本：${text}`;
-          const rephraseUrl = `https://text.pollinations.ai/${encodeURIComponent(rephrasePrompt)}?model=openai&nologo=true`; // Using a general LLM model
+        } else {
+          throw new Error("您的浏览器不支持Web Speech API");
+        }
+      } else {
+        // Use Pollinations.ai API
+        if (readingMode === 'interpretive') {
+            // Step 1: Call an LLM to rephrase the text
+            toast({
+                title: "正在智能演绎文本...",
+                description: "这可能需要一些时间，请稍候。",
+                variant: "info"
+            });
+            const rephrasePrompt = `请将以下文本转换为自媒体口播风格，使其更生动、吸引人，不要以对话形式回复，直接给出转换后的文本：${text}`;
+            const rephraseUrl = `https://text.pollinations.ai/${encodeURIComponent(rephrasePrompt)}?model=openai&nologo=true`; // Using a general LLM model
 
-          const rephraseResponse = await fetch(rephraseUrl);
-          if (!rephraseResponse.ok) {
-              throw new Error(`文本演绎失败: ${rephraseResponse.status} - ${await rephraseResponse.text()}`);
-          }
-          const rephrasedText = await rephraseResponse.text();
-          finalPromptForAudio = rephrasedText.trim();
+            const rephraseResponse = await fetch(rephraseUrl);
+            if (!rephraseResponse.ok) {
+                throw new Error(`文本演绎失败: ${rephraseResponse.status} - ${await rephraseResponse.text()}`);
+            }
+            const rephrasedText = await rephraseResponse.text();
+            finalPromptForAudio = rephrasedText.trim();
 
-          toast({
-              title: "文本已智能演绎",
-              description: "正在将演绎后的文本转换为语音...",
-              variant: "default"
-          });
+            toast({
+                title: "文本已智能演绎",
+                description: "正在将演绎后的文本转换为语音...",
+                variant: "default"
+            });
 
-      } else { // strict mode
-          finalPromptForAudio = `请朗读以下文本：${text}`; // Explicitly ask to read
+        } else { // strict mode
+            finalPromptForAudio = `请朗读以下文本：${text}`; // Explicitly ask to read
+        }
+
+        // Step 2: Generate audio from the finalPromptForAudio
+        generatedAudioUrl = `https://text.pollinations.ai/${encodeURIComponent(finalPromptForAudio)}?model=openai-audio&voice=${selectedVoice}&nologo=true`;
+        
+        // Simulate loading delay for better UX
+        await new Promise(resolve => setTimeout(resolve, 1500));
       }
-
-      // Step 2: Generate audio from the finalPromptForAudio
-      const url = `https://text.pollinations.ai/${encodeURIComponent(finalPromptForAudio)}?model=openai-audio&voice=${selectedVoice}&nologo=true`;
       
-      // Simulate loading delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      setAudioUrl(url);
+      setAudioUrl(generatedAudioUrl);
       
       const newHistoryItem: HistoryItem = {
         id: Date.now(),
         timestamp: new Date(),
         voice: selectedVoice, // Store the English voice ID
         text: text, // Store original text
-        audioUrl: url,
+        audioUrl: generatedAudioUrl,
         readingMode: readingMode
       };
       
       setHistory(prev => [newHistoryItem, ...prev.slice(0, 9)]);
       
-      toast({
-        title: "语音生成成功",
-        description: "您的文本已成功转换为语音",
-        variant: "default",
-      });
+      if (selectedVoice !== 'browser-native') {
+        toast({
+          title: "语音生成成功",
+          description: "您的文本已成功转换为语音",
+          variant: "default",
+        });
+      }
     } catch (error: any) {
       console.error('Error generating audio:', error);
       toast({
@@ -432,6 +462,12 @@ const Voice = () => {
                         </div>
                       </div>
                     </div>
+                  ) : (selectedVoice === 'browser-native' && !loading && text.trim()) ? (
+                    <div className="h-80 bg-[#0f1419] rounded-lg flex items-center justify-center border border-[#203042]/60">
+                      <p className="text-gray-500 text-base">
+                        正在使用浏览器内置语音播放，无下载链接
+                      </p>
+                    </div>
                   ) : (
                     <div className="h-80 bg-[#0f1419] rounded-lg flex items-center justify-center border border-[#203042]/60">
                       <p className="text-gray-500 text-base">
@@ -489,13 +525,17 @@ const Voice = () => {
                           <p className="text-white text-sm mb-3 line-clamp-2">{item.text}</p>
                           
                           <div className="flex justify-end">
-                            <Button 
-                              size="sm"
-                              className="bg-cyan-500 hover:bg-cyan-600 text-xs"
-                              onClick={() => setAudioUrl(item.audioUrl)} // Set audioUrl to play this history item
-                            >
-                              下载
-                            </Button>
+                            {item.audioUrl ? (
+                              <Button 
+                                size="sm"
+                                className="bg-cyan-500 hover:bg-cyan-600 text-xs"
+                                onClick={() => setAudioUrl(item.audioUrl)} // Set audioUrl to play this history item
+                              >
+                                下载
+                              </Button>
+                            ) : (
+                              <span className="text-gray-500 text-xs">浏览器内置语音</span>
+                            )}
                           </div>
                         </div>
                       ))}
