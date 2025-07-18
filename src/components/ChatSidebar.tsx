@@ -18,7 +18,8 @@ interface ChatSidebarProps {
   aiModels: { // Now specifically for text models
     id: string;
     name: string;
-    group?: string;
+    group?: string; // Make group optional
+    apiProvider?: string; // Add apiProvider
   }[];
 }
 
@@ -102,8 +103,20 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
             onChange={e => onModelChange(e.target.value)}
             className="w-full bg-[#151b2a] border border-[#23304d] text-gray-200 py-2.5 px-3 rounded-lg shadow mb-4 focus:outline-none focus:border-cyan-400 text-sm"
           >
-            {aiModels.map(m => (
-              <option key={m.id} value={m.id}>{m.name}</option>
+            {/* Group models by group property */}
+            {Object.entries(aiModels.reduce((acc, model) => {
+              const groupName = model.group || '其他'; // Default group if not specified
+              if (!acc[groupName]) {
+                acc[groupName] = [];
+              }
+              acc[groupName].push(model);
+              return acc;
+            }, {} as Record<string, typeof aiModels>)).map(([groupName, modelsInGroup]) => (
+              <optgroup key={groupName} label={groupName}>
+                {modelsInGroup.map(m => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>

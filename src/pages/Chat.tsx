@@ -27,15 +27,27 @@ const Chat = () => {
   const [chatMode, setChatMode] = useState<'general' | 'agent'>('general'); // 'general' or 'agent'
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // AI大模型列表 (Pollinations.ai 兼容)
+  // OpenRouter API Key (In a real application, this should be an environment variable or managed securely)
+  const OPENROUTER_API_KEY = "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";
+
+  // AI大模型列表 (Pollinations.ai 和 OpenRouter 兼容)
   const aiTextModels = [
-    { id: "openai", name: "OpenAI GPT-4o-mini", group: "OpenAI" },
-    { id: "llama", name: "Llama 3.3 70B", group: "Meta" },
-    { id: "mistral", name: "Mistral Nemo", group: "Mistral" },
-    { id: "deepseek", name: "DeepSeek-V3", group: "DeepSeek" },
-    { id: "deepseek-r1", name: "DeepSeek-R1 Distill Qwen 32B", group: "DeepSeek" },
-    { id: "phi", name: "Phi-4 Multimodal Instruct", group: "Microsoft" },
-    { id: "qwen-coder", name: "Qwen 2.5 Coder 32B", group: "Qwen" }
+    // Pollinations.ai models
+    { id: "openai", name: "OpenAI GPT-4o-mini", group: "OpenAI", apiProvider: "pollinations" },
+    { id: "llama", name: "Llama 3.3 70B", group: "Meta", apiProvider: "pollinations" },
+    { id: "mistral", name: "Mistral Nemo", group: "Mistral", apiProvider: "pollinations" },
+    { id: "deepseek", name: "DeepSeek-V3", group: "DeepSeek", apiProvider: "pollinations" },
+    { id: "deepseek-r1", name: "DeepSeek-R1 Distill Qwen 32B", group: "DeepSeek", apiProvider: "pollinations" },
+    { id: "phi", name: "Phi-4 Multimodal Instruct", group: "Microsoft", apiProvider: "pollinations" },
+    { id: "qwen-coder", name: "Qwen 2.5 Coder 32B", group: "Qwen", apiProvider: "pollinations" },
+    // OpenRouter models (Free tier models as of user's request)
+    { id: "google/gemma-3n-e4b-it:free", name: "Gemma 3n 4B (Free)", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "qwen/qwen3-235b-a22b:free", name: "Qwen 3 235B (Free)", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "deepseek/deepseek-r1:free", name: "DeepSeek R1 (Free)", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "deepseek/deepseek-chat-v3-0324:free", name: "DeepSeek v3 (Free)", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "agentica-org/deepcoder-14b-preview:free", name: "DeepCoder 14B (Free)", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "meta-llama/llama-4-maverick:free", name: "Llama 4 Maverick (Free)", group: "OpenRouter", apiProvider: "openrouter" },
+    { id: "moonshotai/kimi-dev-72b:free", name: "Kimi Dev 72B (Free)", group: "OpenRouter", apiProvider: "openrouter" },
   ];
 
   // AI智能体列表
@@ -61,44 +73,115 @@ const Chat = () => {
 
   // 通用文本生成API调用
   const callTextAPI = async (prompt: string, modelId: string) => {
+    setIsLoading(true);
+    const selectedModelConfig = aiTextModels.find(m => m.id === modelId);
+    if (!selectedModelConfig) {
+      throw new Error("Selected model not found.");
+    }
+
+    let aiResponse = '';
     try {
-      setIsLoading(true);
-      
-      const encodedPrompt = encodeURIComponent(prompt);
-      const apiUrl = `https://text.pollinations.ai/${encodedPrompt}?model=${modelId}`;
-      
-      const response = await fetch(apiUrl);
-      if (!response.ok) {
-        throw new Error(`API响应错误: ${response.status}`);
-      }
-      
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let aiResponse = '';
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        aiResponse += chunk;
+      if (selectedModelConfig.apiProvider === 'pollinations') {
+        const encodedPrompt = encodeURIComponent(prompt);
+        const apiUrl = `https://text.pollinations.ai/${encodedPrompt}?model=${modelId}`;
         
-        setMessages(prev => {
-          const newMessages = [...prev];
-          if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'assistant' && newMessages[newMessages.length - 1].content === '') {
-            newMessages[newMessages.length - 1].content = aiResponse;
-          } else {
-            newMessages.push({ id: Date.now().toString(), role: 'assistant', content: aiResponse, timestamp: new Date() });
-          }
-          return newMessages;
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+          throw new Error(`Pollinations API error: ${response.status}`);
+        }
+        
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          aiResponse += chunk;
+          
+          setMessages(prev => {
+            const newMessages = [...prev];
+            if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'assistant' && newMessages[newMessages.length - 1].content === '') {
+              newMessages[newMessages.length - 1].content = aiResponse;
+            } else {
+              newMessages.push({ id: Date.now().toString(), role: 'assistant', content: aiResponse, timestamp: new Date() });
+            }
+            return newMessages;
+          });
+        }
+      } else if (selectedModelConfig.apiProvider === 'openrouter') {
+        const openRouterApiUrl = "https://openrouter.ai/api/v1/chat/completions";
+        const response = await fetch(openRouterApiUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [{ role: "user", content: prompt }],
+            stream: true, // Request streaming response
+          }),
         });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`OpenRouter API error: ${response.status} - ${errorData.message || JSON.stringify(errorData)}`);
+        }
+
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          
+          // OpenRouter streaming sends multiple JSON objects, each prefixed with "data: "
+          chunk.split('\n').forEach(line => {
+            if (line.startsWith('data: ')) {
+              const jsonStr = line.substring(6);
+              if (jsonStr === '[DONE]') {
+                return;
+              }
+              try {
+                const data = JSON.parse(jsonStr);
+                if (data.choices && data.choices.length > 0 && data.choices[0].delta && data.choices[0].delta.content) {
+                  aiResponse += data.choices[0].delta.content;
+                  setMessages(prev => {
+                    const newMessages = [...prev];
+                    // Update the last message if it's the AI's and empty, otherwise add a new one
+                    if (newMessages.length > 0 && newMessages[newMessages.length - 1].role === 'assistant' && newMessages[newMessages.length - 1].content === '') {
+                      newMessages[newMessages.length - 1].content = aiResponse;
+                    } else {
+                      // This case might happen if the first chunk is not empty, or if a new message needs to be added
+                      // To avoid duplicate messages, we should ensure we're only updating the *current* AI response.
+                      // A more robust solution might involve tracking the AI message ID.
+                      // For now, we'll assume the last message is the one being built.
+                      const lastMsg = newMessages[newMessages.length - 1];
+                      if (lastMsg && lastMsg.role === 'assistant') {
+                        lastMsg.content = aiResponse;
+                      } else {
+                        newMessages.push({ id: Date.now().toString(), role: 'assistant', content: aiResponse, timestamp: new Date() });
+                      }
+                    }
+                    return newMessages;
+                  });
+                }
+              } catch (e) {
+                console.error("Error parsing OpenRouter stream chunk:", e, jsonStr);
+              }
+            }
+          });
+        }
       }
       
       return aiResponse;
-    } catch (error) {
-      console.error("API调用错误:", error);
+    } catch (error: any) {
+      console.error("API call error:", error);
       toast({
         title: "模型调用失败",
-        description: "请重试或切换其他模型",
+        description: `请重试或切换其他模型: ${error.message}`,
         variant: "destructive"
       });
       return "抱歉，我在处理您的请求时遇到了问题。请稍后再试。";
@@ -200,7 +283,7 @@ const Chat = () => {
 爆款增强包 ✅ 标题优化器：自动生成10条带emoji的变体 ✅ 标签策略：按内容匹配三级标签） ✅ 发布时间建议：根据历史数据推荐**${topic || '用户输入的主题'}**流量高峰时段
         `;
       } else if (agentId === 'code-generator') {
-        aiResponse = `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那数列的函数。”`;
+        aiResponse = `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那契数列的函数。”`;
       } else if (agentId === 'resume-optimizer') {
         aiResponse = `您选择了简历优化师。请粘贴您的简历内容，或者告诉我您的目标职位和主要经历，我将为您提供优化建议。`;
       } else if (agentId === 'mental-wellness-assistant') {
@@ -281,13 +364,19 @@ const Chat = () => {
         responseContent = await callAgentAPI(currentInput, selectedAgent);
       }
 
-      // 更新AI消息内容
+      // Update the last AI message with the final content
       setMessages(prev => {
         const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = {
-          ...newMessages[newMessages.length - 1],
-          content: responseContent
-        };
+        const lastMsgIndex = newMessages.length - 1;
+        if (lastMsgIndex >= 0 && newMessages[lastMsgIndex].role === 'assistant') {
+          newMessages[lastMsgIndex] = {
+            ...newMessages[lastMsgIndex],
+            content: responseContent
+          };
+        } else {
+          // Fallback in case the placeholder wasn't added or was replaced
+          newMessages.push({ id: (Date.now() + 2).toString(), role: 'assistant', content: responseContent, timestamp: new Date() });
+        }
         return newMessages;
       });
 
