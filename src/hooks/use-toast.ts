@@ -1,4 +1,3 @@
-
 import { toast as sonnerToast } from "sonner";
 import { useState, useEffect } from "react";
 
@@ -26,18 +25,19 @@ export const toast = ({
   duration = 3000,
   action,
 }: ToastProps) => {
-  // Convert variant to sonner style
-  const type = 
-    variant === "destructive" ? "error" :
-    variant === "success" ? "success" : 
-    variant === "warning" ? "warning" :
-    variant === "info" ? "info" : "default";
-
-  return sonnerToast[type](title, {
-    description,
-    duration,
-    action,
-  });
+  switch (variant) {
+    case "destructive":
+      return sonnerToast.error(title, { description, duration, action });
+    case "success":
+      return sonnerToast.success(title, { description, duration, action });
+    case "warning":
+      return sonnerToast.warning(title, { description, duration, action });
+    case "info":
+      return sonnerToast.info(title, { description, duration, action });
+    case "default":
+    default: // Fallback for any unexpected variant
+      return sonnerToast.message(title, { description, duration, action });
+  }
 };
 
 export const useToast = () => {
