@@ -91,11 +91,26 @@ const Voice = () => {
     const seed = voice.name.replace(/\s/g, ''); // Use voice name as seed
     const avatarType = 'avataaars'; // Changed to avataaars for more human-like avatars
     const avatarColor = voice.color.substring(1); // Remove #
-    let avatarGenderParam = '';
+    
+    // Enhanced parameters for more diverse and human-like avatars
+    const topTypes = ['NoHair', 'Eyepatch', 'Hat', 'Hijab', 'Turban', 'WinterHat1', 'WinterHat2', 'WinterHat3', 'WinterHat4', 'LongHairBigHair', 'LongHairBob', 'LongHairBun', 'LongHairCurly', 'LongHairCurvy', 'LongHairDreads', 'LongHairFrida', 'LongHairFro', 'LongHairFroBand', 'LongHairNotTooLong', 'LongHairShavedSides', 'LongHairMiaWallace', 'LongHairStraight', 'LongHairStraight2', 'LongHairStraightStrand', 'ShortHairDreads', 'ShortHairFrizzle', 'ShortHairShaggyMullet', 'ShortHairShortCurly', 'ShortHairShortFlat', 'ShortHairShortRound', 'ShortHairShortWaved', 'ShortHairSides', 'ShortHairTheCaesar', 'ShortHairTheCaesarAndFringe'];
+    const accessoriesTypes = ['Blank', 'Kurt', 'Prescription01', 'Prescription02', 'Round', 'Sunglasses', 'Wayfarers'];
+    const facialHairTypes = ['Blank', 'BeardMedium', 'BeardLight', 'BeardMajestic', 'MoustacheFancy', 'MoustacheMagnum'];
+    const clotheTypes = ['BlazerShirt', 'BlazerSweater', 'CollarSweater', 'GraphicShirt', 'Hoodie', 'Overall', 'ShirtCrewNeck', 'ShirtScoopNeck', 'ShirtVNeck'];
+    const eyeTypes = ['Close', 'Cry', 'Default', 'Dizzy', 'EyeRoll', 'Happy', 'Hearts', 'Side', 'Squint', 'Surprised', 'Wink', 'WinkWacky'];
+    const eyebrowTypes = ['Angry', 'AngryNatural', 'Default', 'DefaultNatural', 'FlatNatural', 'FrownNatural', 'RaisedExcited', 'RaisedExcitedNatural', 'SadConcerned', 'SadConcernedNatural', 'UnibrowNatural', 'Updown', 'UpdownNatural'];
+    const mouthTypes = ['Concerned', 'Default', 'Disbelief', 'Eating', 'Grimace', 'Sad', 'ScreamOpen', 'Serious', 'Smile', 'Tongue', 'Twinkle', 'Vomit'];
+    const skinColors = ['Tanned', 'Yellow', 'Pale', 'Light', 'Brown', 'DarkBrown', 'Black'];
+
+    const getRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
+    let avatarParams = '';
     if (voice.gender === 'male') {
-      avatarGenderParam = '&accessories=glasses,beard&mouth=smile,eating&eyes=happy,wink';
+      avatarParams += `&topType=${getRandom(topTypes)}&accessoriesType=${getRandom(accessoriesTypes)}&facialHairType=${getRandom(facialHairTypes)}&clotheType=${getRandom(clotheTypes)}&eyeType=${getRandom(eyeTypes)}&eyebrowType=${getRandom(eyebrowTypes)}&mouthType=${getRandom(mouthTypes)}&skinColor=${getRandom(skinColors)}`;
     } else if (voice.gender === 'female') {
-      avatarGenderParam = '&hair=longHair,shortHair&top=longHair,shortHair&eyebrows=up,down&mouth=smile,kiss';
+      avatarParams += `&topType=${getRandom(topTypes)}&accessoriesType=${getRandom(accessoriesTypes)}&clotheType=${getRandom(clotheTypes)}&eyeType=${getRandom(eyeTypes)}&eyebrowType=${getRandom(eyebrowTypes)}&mouthType=${getRandom(mouthTypes)}&skinColor=${getRandom(skinColors)}`;
+    } else { // Neutral or unknown gender
+      avatarParams += `&topType=${getRandom(topTypes)}&accessoriesType=${getRandom(accessoriesTypes)}&facialHairType=${getRandom(facialHairTypes)}&clotheType=${getRandom(clotheTypes)}&eyeType=${getRandom(eyeTypes)}&eyebrowType=${getRandom(eyebrowTypes)}&mouthType=${getRandom(mouthTypes)}&skinColor=${getRandom(skinColors)}`;
     }
     
     // Explicitly construct the object to ensure types are preserved
@@ -106,7 +121,7 @@ const Voice = () => {
       color: voice.color,
       // Conditionally add gender to preserve its literal type if it exists
       ...(voice.gender && { gender: voice.gender }), 
-      avatarUrl: `https://api.dicebear.com/7.x/${avatarType}/svg?seed=${seed}&backgroundColor=${avatarColor}${avatarGenderParam}`
+      avatarUrl: `https://api.dicebear.com/7.x/${avatarType}/svg?seed=${seed}&backgroundColor=${avatarColor}${avatarParams}`
     };
     return newVoice;
   });
