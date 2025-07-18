@@ -23,6 +23,8 @@ interface VoiceOption {
   name: string;
   description: string;
   color: string;
+  gender?: 'male' | 'female' | 'neutral'; // Added gender for avatar generation
+  avatarUrl?: string; // Added avatarUrl
 }
 
 interface HistoryItem {
@@ -60,31 +62,56 @@ const Voice = () => {
     return color;
   };
 
-  // Voice options - expanded to 20 options with English IDs, including Web Speech API
-  const voiceOptions: VoiceOption[] = [
-    { id: 'alloy', name: 'Alloy', description: '平衡中性', color: stringToColor('alloy') },
-    { id: 'echo', name: 'Echo', description: '深沉有力', color: stringToColor('echo') },
-    { id: 'fable', name: 'Fable', description: '温暖讲述', color: stringToColor('fable') },
-    { id: 'onyx', name: 'Onyx', description: '威严庄重', color: stringToColor('onyx') },
-    { id: 'nova', name: 'Nova', description: '友好专业', color: stringToColor('nova') },
-    { id: 'shimmer', name: 'Shimmer', description: '轻快明亮', color: stringToColor('shimmer') },
-    { id: 'coral', name: 'Coral', description: '温柔平静', color: stringToColor('coral') },
-    { id: 'verse', name: 'Verse', description: '生动诗意', color: stringToColor('verse') },
-    { id: 'ballad', name: 'Ballad', description: '抒情柔和', color: stringToColor('ballad') },
-    { id: 'ash', name: 'Ash', description: '思考沉稳', color: stringToColor('ash') },
-    { id: 'sage', name: 'Sage', description: '智慧老练', color: stringToColor('sage') },
-    { id: 'amuch', name: 'Amuch', description: '清晰有力', color: stringToColor('amuch') },
-    { id: 'aster', name: 'Aster', description: '柔和自然', color: stringToColor('aster') },
-    { id: 'brook', name: 'Brook', description: '流畅舒适', color: stringToColor('brook') },
-    { id: 'clover', name: 'Clover', description: '活泼年轻', color: stringToColor('clover') },
-    { id: 'dan', name: 'Dan', description: '男声稳重', color: stringToColor('dan') },
-    { id: 'elan', name: 'Elan', description: '优雅流利', color: stringToColor('elan') },
-    { id: 'marilyn', name: 'Marilyn', description: '甜美悦耳', color: stringToColor('marilyn') },
-    { id: 'meadow', name: 'Meadow', description: '清新宁静', color: stringToColor('meadow') },
-    { id: 'browser-native', name: '系统默认', description: '浏览器内置', color: stringToColor('browser-native') }, // New 20th voice
+  // Base voice options without avatarUrl
+  const baseVoiceOptions: (Omit<VoiceOption, 'avatarUrl'> & { gender?: 'male' | 'female' | 'neutral' })[] = [
+    { id: 'alloy', name: 'Alloy', description: '平衡中性', color: stringToColor('alloy'), gender: 'male' },
+    { id: 'echo', name: 'Echo', description: '深沉有力', color: stringToColor('echo'), gender: 'male' },
+    { id: 'fable', name: 'Fable', description: '温暖讲述', color: stringToColor('fable'), gender: 'female' },
+    { id: 'onyx', name: 'Onyx', description: '威严庄重', color: stringToColor('onyx'), gender: 'male' },
+    { id: 'nova', name: 'Nova', description: '友好专业', color: stringToColor('nova'), gender: 'female' },
+    { id: 'shimmer', name: 'Shimmer', description: '轻快明亮', color: stringToColor('shimmer'), gender: 'female' },
+    { id: 'coral', name: 'Coral', description: '温柔平静', color: stringToColor('coral'), gender: 'female' },
+    { id: 'verse', name: 'Verse', description: '生动诗意', color: stringToColor('verse'), gender: 'male' },
+    { id: 'ballad', name: 'Ballad', description: '抒情柔和', color: stringToColor('ballad'), gender: 'female' },
+    { id: 'ash', name: 'Ash', description: '思考沉稳', color: stringToColor('ash'), gender: 'male' },
+    { id: 'sage', name: 'Sage', description: '智慧老练', color: stringToColor('sage'), gender: 'male' },
+    { id: 'amuch', name: 'Amuch', description: '清晰有力', color: stringToColor('amuch'), gender: 'male' },
+    { id: 'aster', name: 'Aster', description: '柔和自然', color: stringToColor('aster'), gender: 'female' },
+    { id: 'brook', name: 'Brook', description: '流畅舒适', color: stringToColor('brook'), gender: 'female' },
+    { id: 'clover', name: 'Clover', description: '活泼年轻', color: stringToColor('clover'), gender: 'female' },
+    { id: 'dan', name: 'Dan', description: '男声稳重', color: stringToColor('dan'), gender: 'male' },
+    { id: 'elan', name: 'Elan', description: '优雅流利', color: stringToColor('elan'), gender: 'female' },
+    { id: 'marilyn', name: 'Marilyn', description: '甜美悦耳', color: stringToColor('marilyn'), gender: 'female' },
+    { id: 'meadow', name: 'Meadow', description: '清新宁静', color: stringToColor('meadow'), gender: 'female' },
+    { id: 'browser-native', name: '本地语音助手', description: '浏览器内置', color: stringToColor('browser-native'), gender: 'neutral' },
   ];
 
-  // A selection of icons to cycle through for voice options
+  const voiceOptions: VoiceOption[] = baseVoiceOptions.map(voice => {
+    // Generate NFT-style avatar URL using dicebear.com
+    const seed = voice.name.replace(/\s/g, ''); // Use voice name as seed
+    const avatarType = 'pixel-art'; // Or 'bottts', 'avataaars', 'identicon'
+    const avatarColor = voice.color.substring(1); // Remove #
+    let avatarGenderParam = '';
+    if (voice.gender === 'male') {
+      avatarGenderParam = '&accessories=glasses,beard&mouth=smile,eating&eyes=happy,wink';
+    } else if (voice.gender === 'female') {
+      avatarGenderParam = '&hair=longHair,shortHair&top=longHair,shortHair&eyebrows=up,down&mouth=smile,kiss';
+    }
+    
+    // Explicitly construct the object to ensure types are preserved
+    const newVoice: VoiceOption = {
+      id: voice.id,
+      name: voice.name,
+      description: voice.description,
+      color: voice.color,
+      // Conditionally add gender to preserve its literal type if it exists
+      ...(voice.gender && { gender: voice.gender }), 
+      avatarUrl: `https://api.dicebear.com/7.x/${avatarType}/svg?seed=${seed}&backgroundColor=${avatarColor}${avatarGenderParam}`
+    };
+    return newVoice;
+  });
+
+  // A selection of icons to cycle through for voice options (fallback if avatar fails)
   const voiceIcons = [
     User, Mic, Speaker, Feather, Smile, Sparkles, Music, Heart, Star, Sun, Cloud, Gift, Bell, Camera, Film, BookText, Volume2
   ];
@@ -186,19 +213,28 @@ const Voice = () => {
             const rephrasePrompt = `请将以下文本转换为自媒体口播风格，使其更生动、吸引人，不要以对话形式回复，直接给出转换后的文本：${text}`;
             const rephraseUrl = `https://text.pollinations.ai/${encodeURIComponent(rephrasePrompt)}?model=openai&nologo=true`; // Using a general LLM model
 
-            const rephraseResponse = await fetch(rephraseUrl);
-            if (!rephraseResponse.ok) {
-                throw new Error(`文本演绎失败: ${rephraseResponse.status} - ${await rephraseResponse.text()}`);
+            try {
+              const rephraseResponse = await fetch(rephraseUrl);
+              if (!rephraseResponse.ok) {
+                  throw new Error(`API响应错误: ${rephraseResponse.status} - ${await rephraseResponse.text()}`);
+              }
+              const rephrasedText = await rephraseResponse.text();
+              finalPromptForAudio = rephrasedText.trim();
+
+              toast({
+                  title: "文本已智能演绎",
+                  description: "正在将演绎后的文本转换为语音...",
+                  variant: "default"
+              });
+            } catch (rephraseError: any) {
+              console.error("文本演绎失败:", rephraseError);
+              toast({
+                title: "智能演绎失败",
+                description: `文本改写服务出现问题，将使用原文合成语音。错误: ${rephraseError.message}`,
+                variant: "warning"
+              });
+              finalPromptForAudio = `请朗读以下文本：${text}`; // Fallback to original text
             }
-            const rephrasedText = await rephraseResponse.text();
-            finalPromptForAudio = rephrasedText.trim();
-
-            toast({
-                title: "文本已智能演绎",
-                description: "正在将演绎后的文本转换为语音...",
-                variant: "default"
-            });
-
         } else { // strict mode
             finalPromptForAudio = `请朗读以下文本：${text}`; // Explicitly ask to read
         }
@@ -321,12 +357,25 @@ const Voice = () => {
                                   <CheckCircle2 className="h-4 w-4 text-white" />
                                 </div>
                               )}
-                              <div 
-                                className="w-8 h-8 rounded-full flex items-center justify-center mb-1"
-                                style={{ backgroundColor: voice.color }}
-                              >
-                                <VoiceIcon className="h-4 w-4 text-white" />
-                              </div>
+                              {voice.avatarUrl ? (
+                                <img 
+                                  src={voice.avatarUrl} 
+                                  alt={voice.name} 
+                                  className="w-8 h-8 rounded-full mb-1 object-cover" 
+                                  onError={(e) => { // Fallback to icon if avatar fails to load
+                                    const target = e.target as HTMLImageElement;
+                                    target.onerror = null; // Prevent infinite loop
+                                    target.src = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M12 16v-4'/><path d='M12 8h.01'/></svg>`; // Generic icon
+                                  }}
+                                />
+                              ) : (
+                                <div 
+                                  className="w-8 h-8 rounded-full flex items-center justify-center mb-1"
+                                  style={{ backgroundColor: voice.color }}
+                                >
+                                  <VoiceIcon className="h-4 w-4 text-white" />
+                                </div>
+                              )}
                               <div className="text-white font-medium text-xs">{voice.name}</div>
                               <div className="text-gray-400 text-xs">{voice.description}</div>
                             </label>
@@ -375,7 +424,7 @@ const Voice = () => {
                       id="text-input"
                       value={text}
                       onChange={(e) => setText(e.target.value)}
-                      placeholder="使用中国官方说明语法，如测试AI视频合成，可以直接文字转换前缀：请保持文本"
+                      placeholder="请输入文本..."
                       className="min-h-[180px] bg-[#0f1419] border-[#203042]/60 text-white placeholder-gray-500 focus:border-cyan-400 text-base"
                     />
                     <div className="flex justify-between items-center mt-3">
