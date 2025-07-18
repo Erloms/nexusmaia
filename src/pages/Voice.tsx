@@ -216,7 +216,8 @@ const Voice = () => {
             try {
               const rephraseResponse = await fetch(rephraseUrl);
               if (!rephraseResponse.ok) {
-                  throw new Error(`API响应错误: ${rephraseResponse.status} - ${await rephraseResponse.text()}`);
+                  const errorBody = await rephraseResponse.text();
+                  throw new Error(`文本演绎API错误: ${rephraseResponse.status} - ${errorBody}`);
               }
               const rephrasedText = await rephraseResponse.text();
               finalPromptForAudio = rephrasedText.trim();
@@ -230,7 +231,7 @@ const Voice = () => {
               console.error("文本演绎失败:", rephraseError);
               toast({
                 title: "智能演绎失败",
-                description: `文本改写服务出现问题，将使用原文合成语音。错误: ${rephraseError.message}`,
+                description: `文本改写服务出现问题，已使用原文合成语音。错误: ${rephraseError.message}`,
                 variant: "warning"
               });
               finalPromptForAudio = `请朗读以下文本：${text}`; // Fallback to original text
@@ -244,6 +245,12 @@ const Voice = () => {
         
         // Simulate loading delay for better UX
         await new Promise(resolve => setTimeout(resolve, 1500));
+
+        const audioResponse = await fetch(generatedAudioUrl);
+        if (!audioResponse.ok) {
+            const errorBody = await audioResponse.text();
+            throw new Error(`语音合成API错误: ${audioResponse.status} - ${errorBody}`);
+        }
       }
       
       setAudioUrl(generatedAudioUrl);
@@ -357,25 +364,36 @@ const Voice = () => {
                                   <CheckCircle2 className="h-4 w-4 text-white" />
                                 </div>
                               )}
-                              {voice.avatarUrl ? (
-                                <img 
-                                  src={voice.avatarUrl} 
-                                  alt={voice.name} 
-                                  className="w-8 h-8 rounded-full mb-1 object-cover" 
-                                  onError={(e) => { // Fallback to icon if avatar fails to load
-                                    const target = e.target as HTMLImageElement;
-                                    target.onerror = null; // Prevent infinite loop
-                                    target.src = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M12 16v-4'/><path d='M12 8h.01'/></svg>`; // Generic icon
-                                  }}
-                                />
-                              ) : (
+                              <div 
+                                className="w-8 h-8 rounded-full flex items-center justify-center mb-1 relative overflow-hidden"
+                                style={{ backgroundColor: voice.color }}
+                              >
+                                {voice.avatarUrl ? (
+                                  <img 
+                                    src={voice.avatarUrl} 
+                                    alt={voice.name} 
+                                    className="w-full h-full object-cover absolute inset-0" 
+                                    onError={(e) => { 
+                                      const target = e.target as HTMLImageElement;
+                                      target.style.display = 'none'; // Hide the broken image
+                                      const iconElement = target.nextElementSibling as HTMLElement;
+                                      if (iconElement) iconElement.style.display = 'flex'; // Show icon
+                                    }}
+                                    onLoad={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.style.display = 'block'; // Ensure image is visible
+                                      const iconElement = target.nextElementSibling as HTMLElement;
+                                      if (iconElement) iconElement.style.display = 'none'; // Hide icon
+                                    }}
+                                  />
+                                ) : null}
                                 <div 
-                                  className="w-8 h-8 rounded-full flex items-center justify-center mb-1"
-                                  style={{ backgroundColor: voice.color }}
+                                  className="w-full h-full flex items-center justify-center"
+                                  style={{ display: voice.avatarUrl ? 'none' : 'flex' }} // Initially hide if avatarUrl exists
                                 >
                                   <VoiceIcon className="h-4 w-4 text-white" />
                                 </div>
-                              )}
+                              </div>
                               <div className="text-white font-medium text-xs">{voice.name}</div>
                               <div className="text-gray-400 text-xs">{voice.description}</div>
                             </label>
