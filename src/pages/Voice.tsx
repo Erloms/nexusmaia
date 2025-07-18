@@ -170,9 +170,9 @@ const Voice = () => {
     setAudioUrl(null); // Clear previous audio
 
     try {
-      let textToSynthesize = text; // This will be the text actually sent to the audio API
-      let generatedAudioUrl: string | null = null;
-      let rephrasedContent: string | undefined = undefined;
+      let audioGenerationPrompt = text; // Start with original text for both modes
+      let generatedAudioUrl: string | null = null; // Declare generatedAudioUrl here
+      let rephrasedContent: string | undefined = undefined; // No rephrased content for these modes
 
       if (selectedVoice === 'browser-native') {
         // Use Web Speech API
@@ -180,7 +180,7 @@ const Voice = () => {
           const utterance = new SpeechSynthesisUtterance(text);
           utterance.lang = 'zh-CN'; 
           window.speechSynthesis.speak(utterance);
-          generatedAudioUrl = null; // No direct URL for browser synthesis
+          generatedAudioUrl = null; // Assign null for browser synthesis
           toast({
             title: "语音播放中",
             description: "正在使用浏览器内置语音合成，音质可能因浏览器而异。",
@@ -192,39 +192,21 @@ const Voice = () => {
       } else {
         // Use Pollinations.ai API
         if (readingMode === 'interpretive') {
+          // For interpretive, use the original text but let the voice model interpret it expressively.
+          audioGenerationPrompt = text; // Just the original text
           toast({
             title: "正在智能演绎文本...",
-            description: "AI正在为您润色文本内容，请稍候。",
+            description: "AI正在以富有表现力的方式朗读您的文本。",
             variant: "info"
           });
-
-          // Step 1: Text rephrasing for 'interpretive' mode
-          const rephrasePrompt = `请将以下文本内容进行润色和演绎，使其更生动、富有表现力，但保持原意，直接输出润色后的文本，不要包含任何额外说明或前缀：\n\n"${text}"`;
-          const rephraseApiUrl = `https://text.pollinations.ai/${encodeURIComponent(rephrasePrompt)}?model=openai&nologo=true`; // Using a general text model for rephrasing
-
-          const rephraseResponse = await fetch(rephraseApiUrl);
-          if (!rephraseResponse.ok) {
-            const errorBody = await rephraseResponse.text();
-            throw new Error(`文本演绎API错误: ${rephraseResponse.status} - ${errorBody}`);
-          }
-
-          const reader = rephraseResponse.body!.getReader();
-          const decoder = new TextDecoder();
-          let streamedRephrasedText = '';
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            streamedRephrasedText += decoder.decode(value, { stream: true });
-          }
-          rephrasedContent = streamedRephrasedText.trim();
-          textToSynthesize = rephrasedContent; // Use the rephrased text for audio
-        }
-
-        // Step 2: Generate audio from textToSynthesize
-        let audioGenerationPrompt = textToSynthesize;
-        if (readingMode === 'strict') {
+        } else if (readingMode === 'strict') {
             // For strict reading, ensure the prompt explicitly tells the audio model to read verbatim.
-            audioGenerationPrompt = `请严格地、不加任何修改地朗读以下文本：${textToSynthesize}`;
+            audioGenerationPrompt = `请严格地、不加任何修改地朗读以下文本：${text}`;
+            toast({
+              title: "正在原文朗读文本...",
+              description: "AI正在严格按照原文朗读您的文本。",
+              variant: "info"
+            });
         }
         
         generatedAudioUrl = `https://text.pollinations.ai/${encodeURIComponent(audioGenerationPrompt)}?model=openai-audio&voice=${selectedVoice}&nologo=true`;
@@ -248,7 +230,7 @@ const Voice = () => {
         text: text, // Always store original text in history
         audioUrl: generatedAudioUrl,
         readingMode: readingMode,
-        rephrasedText: rephrasedContent // Store rephrased text if it was generated
+        rephrasedText: rephrasedContent // This will always be undefined now for these modes
       };
       
       setHistory(prev => [newHistoryItem, ...prev.slice(0, 9)]);
@@ -419,7 +401,7 @@ const Voice = () => {
                       </Button>
                     </div>
                     <p className="text-gray-400 text-xs mt-2 text-center">
-                      {readingMode === 'strict' ? '严格按照输入文本朗读' : 'AI将润色文本内容，使其更生动'}
+                      {readingMode === 'strict' ? '严格按照输入文本朗读' : 'AI将以富有表现力的方式朗读您的文本'}
                     </p>
                   </div>
 
