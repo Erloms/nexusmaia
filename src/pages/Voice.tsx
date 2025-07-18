@@ -83,7 +83,7 @@ const Voice = () => {
     { id: 'elan', name: 'Elan', description: '优雅流利', color: stringToColor('elan'), gender: 'female' },
     { id: 'marilyn', name: 'Marilyn', description: '甜美悦耳', color: stringToColor('marilyn'), gender: 'female' },
     { id: 'meadow', name: 'Meadow', description: '清新宁静', color: stringToColor('meadow'), gender: 'female' },
-    { id: 'browser-native', name: '小雅', description: '浏览器内置', color: stringToColor('browser-native'), gender: 'female' }, // Renamed to 小雅, set gender
+    { id: 'browser-native', name: 'Browser Voice', description: '浏览器内置', color: stringToColor('browser-native'), gender: 'neutral' }, // Changed name
   ];
 
   const voiceOptions: VoiceOption[] = baseVoiceOptions.map(voice => {
@@ -442,7 +442,7 @@ const Voice = () => {
                       id="text-input"
                       value={text}
                       onChange={(e) => setText(e.target.value)}
-                      placeholder="请输入文本..." // Simplified placeholder
+                      placeholder="在这里输入您的文本..." // Changed placeholder
                       className="min-h-[180px] bg-[#0f1419] border-[#203042]/60 text-white placeholder-gray-500 focus:border-cyan-400 text-base"
                     />
                     <div className="flex justify-between items-center mt-3">

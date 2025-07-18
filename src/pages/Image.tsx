@@ -137,7 +137,7 @@ const Image = () => {
     return ratios[aspectRatio] || { width: 1024, height: 1024 };
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (useNewSeed: boolean = true) => { // Added useNewSeed parameter
     if (!prompt.trim()) {
       toast({
         title: "请输入提示词",
@@ -150,10 +150,11 @@ const Image = () => {
     if (!checkUsageLimit()) return;
 
     setIsLoading(true);
-    
+    setGeneratedImage(null); // Clear previous image
+    setVideoUrl(null); // Clear previous video
+
     try {
-      // If seed is empty, generate a random one for this generation
-      const currentSeed = seed || generateRandomSeed();
+      const currentSeed = useNewSeed ? generateRandomSeed() : seed; // Use new seed or existing
       const dimensions = getDimensions();
       
       // 构建 Pollinations.ai URL
@@ -164,7 +165,6 @@ const Image = () => {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       setGeneratedImage(imageUrl);
-      setVideoUrl(null); // Reset video when generating new image
       updateUsage();
 
       // Add to history
@@ -193,6 +193,10 @@ const Image = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleRedraw = () => { // New function for redraw
+    handleGenerate(true); // Generate with a new random seed
   };
 
   const handleDownload = () => {
@@ -232,7 +236,7 @@ const Image = () => {
       // 根据选择的魔法效果生成对应的提示词
       const effectPrompts = {
         'sketch-to-color': '素描稿用刷子刷过变成彩色画，绘画过程，艺术创作',
-        'static-to-dynamic': '让画面动起来，添加自然的动态效果，生动有趣',
+        'static-to-dynamic': '让静态画面充满生命力，添加自然的动态效果，生动有趣',
         'watercolor-flow': '水彩颜料在纸上流淌，色彩渐变，艺术流动感',
         'pencil-drawing': '铅笔在纸上绘制的过程，素描艺术，线条流畅',
         'oil-painting': '油画笔刷在画布上创作，厚重笔触，艺术质感',
@@ -571,7 +575,7 @@ const Image = () => {
 
               {/* Generate Button */}
               <Button
-                onClick={handleGenerate}
+                onClick={() => handleGenerate(true)} // Changed to always generate new seed for main button
                 disabled={isLoading || !user}
                 className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white font-bold py-3 h-12"
               >
@@ -584,6 +588,24 @@ const Image = () => {
                   <>
                     <ImageIcon className="mr-2 h-4 w-4" />
                     生成图像
+                  </>
+                )}
+              </Button>
+              {/* New Redraw Button */}
+              <Button
+                onClick={handleRedraw}
+                disabled={isLoading || !user || !generatedImage}
+                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold py-3 h-12 mt-4"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    重绘中...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    重绘图像
                   </>
                 )}
               </Button>
