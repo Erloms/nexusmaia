@@ -88,12 +88,9 @@ const Payment = () => {
       // Call the new Edge Function to create an Alipay order
       const { data, error } = await supabase.functions.invoke('create-alipay-order', {
         body: {
-          user_id: user.id,
-          plan_id: selectedPlan.id, // Use the actual plan ID from the database
-          amount: selectedPlan.price,
           subject: selectedPlan.name,
-          return_url: window.location.origin + '/payment-success', // Example return URL
-          notify_url: window.location.origin + '/api/alipay-notify', // This needs a real webhook endpoint
+          total_amount: selectedPlan.price,
+          product_id: selectedPlan.id,
         }
       });
 
