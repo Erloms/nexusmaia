@@ -193,9 +193,26 @@ serve(async (req) => {
 
     if (configError || !config) {
       console.error('Error fetching payment config:', configError);
-      throw new Error('支付配置未找到');
+      return new Response(
+        JSON.stringify({ error: '支付配置未找到或加载失败。请检查管理员后台配置。' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
     console.log('Fetched Alipay config:', config);
+
+    // 明确检查关键配置项
+    if (!config.alipay_app_id || !config.alipay_private_key || !config.alipay_public_key || !config.notify_url) {
+      console.error('Missing critical Alipay config keys:', {
+        private_key_exists: !!config.alipay_private_key,
+        public_key_exists: !!config.alipay_public_key,
+        app_id_exists: !!config.alipay_app_id,
+        notify_url_exists: !!config.notify_url
+      });
+      return new Response(
+        JSON.stringify({ error: '支付宝配置不完整。请检查应用ID、私钥、公钥和通知URL是否已填写。' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // **修正逻辑：根据 is_sandbox 强制设置正确的网关地址**
     let alipayGatewayUrl = config.alipay_gateway_url;
@@ -226,7 +243,7 @@ serve(async (req) => {
 
     if (orderError) {
       console.error('Supabase order insert error:', orderError);
-      throw new Error('创建订单失败');
+      throw new Error(`Supabase订单插入失败: ${orderError.message}`);
     }
     console.log('Order created in Supabase:', orderData);
 
