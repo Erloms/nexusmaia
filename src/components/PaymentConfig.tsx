@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/hooks/use-toast'; // Corrected import path
+import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client'; // Import supabase client
 
 const PaymentConfig = () => {
   const [config, setConfig] = useState({
@@ -25,20 +26,30 @@ const PaymentConfig = () => {
     const fetchConfig = async () => {
       setLoading(true);
       try {
-        const response = await fetch('/api/payment-config');
-        if (response.ok) {
-          const data = await response.json();
-          if (data) {
-            setConfig(data);
+        // Call the Supabase Edge Function directly
+        const { data, error } = await supabase.functions.invoke('payment-config', {
+          method: 'GET',
+        });
+
+        if (error) {
+          // If no config found (PGRST116), data will be null, which is handled by `data || {}`
+          // For other errors, throw it
+          if (error.status !== 404) { // 404 might indicate function not found or no data
+            throw error;
           }
-        } else {
-          throw new Error('Failed to fetch config');
         }
-      } catch (error) {
+        
+        if (data) {
+          setConfig(prevConfig => ({
+            ...prevConfig,
+            ...data // Merge fetched data, keeping defaults if not present
+          }));
+        }
+      } catch (error: any) {
         console.error('Error fetching payment config:', error);
         toast({
           title: "加载配置失败",
-          description: "无法从服务器获取支付宝配置",
+          description: error.message || "无法从服务器获取支付宝配置",
           variant: "destructive",
         });
       } finally {
@@ -51,24 +62,20 @@ const PaymentConfig = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/payment-config', {
+      // Call the Supabase Edge Function directly
+      const { data, error } = await supabase.functions.invoke('payment-config', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(config)
+        body: config // Send the entire config object
       });
 
-      if (response.ok) {
-        toast({
-          title: "配置保存成功",
-          description: "支付宝配置已更新",
-        });
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '保存失败');
-      }
+      if (error) throw error;
+
+      toast({
+        title: "配置保存成功",
+        description: "支付宝配置已更新",
+      });
     } catch (error: any) {
+      console.error('Error saving payment config:', error);
       toast({
         title: "保存失败",
         description: error.message || "请检查配置信息",
