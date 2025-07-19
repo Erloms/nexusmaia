@@ -9,6 +9,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.9'
 class AlipayRSAUtils {
   
   // 将 PEM 格式的私钥转换为 CryptoKey
+  // 确保私钥是 PKCS8 格式，并包含 BEGIN/END 头部和尾部。
   static async importPrivateKey(pemKey: string): Promise<CryptoKey> {
     // 清理 PEM 格式
     const pemHeader = "-----BEGIN PRIVATE KEY-----";
@@ -35,6 +36,7 @@ class AlipayRSAUtils {
   }
 
   // 将 PEM 格式的公钥转换为 CryptoKey
+  // 确保公钥是 SPKI 格式，并包含 BEGIN/END 头部和尾部。
   static async importPublicKey(pemKey: string): Promise<CryptoKey> {
     // 清理 PEM 格式
     const pemHeader = "-----BEGIN PUBLIC KEY-----";
