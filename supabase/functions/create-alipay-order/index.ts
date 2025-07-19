@@ -126,6 +126,8 @@ interface CreateOrderRequest {
 }
 
 serve(async (req) => {
+  // console.log('Edge Function create-alipay-order started for request:', req.url); // Removed for now, as it's not showing up
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -138,19 +140,27 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Clone the request to read body as text first for logging
-    const clonedReq = req.clone();
-    const rawBody = await clonedReq.text();
-    console.log('Raw request body received by Edge Function:', rawBody); // Added log
-
     let requestBody: CreateOrderRequest;
+    let rawBody: string;
     try {
-      requestBody = JSON.parse(rawBody);
-      console.log('Parsed request body:', requestBody);
-    } catch (parseError) {
-      console.error('Error parsing request body as JSON:', parseError);
+      // Try to read raw body first
+      rawBody = await req.text();
+      try {
+        requestBody = JSON.parse(rawBody);
+      } catch (parseError) {
+        // If JSON parsing fails, return specific error
+        return new Response(
+          JSON.stringify({ error: `Invalid JSON in request body: ${parseError.message}. Raw body: ${rawBody}` }),
+          { 
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+    } catch (readError) {
+      // If reading raw body fails (e.g., stream already consumed), return specific error
       return new Response(
-        JSON.stringify({ error: 'Invalid JSON in request body' }),
+        JSON.stringify({ error: `Failed to read request body: ${readError.message}` }),
         { 
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -170,8 +180,6 @@ serve(async (req) => {
         }
       )
     }
-
-    console.log('创建支付宝订单请求:', { subject, total_amount, product_id });
 
     // 获取当前用户
     const authHeader = req.headers.get('Authorization');
@@ -194,7 +202,6 @@ serve(async (req) => {
       .single();
 
     if (configError || !config) {
-      console.error('获取支付配置失败:', configError);
       throw new Error('支付配置未找到');
     }
 
@@ -217,11 +224,8 @@ serve(async (req) => {
       .single();
 
     if (orderError) {
-      console.error('创建订单失败:', orderError);
       throw new Error('创建订单失败');
     }
-
-    console.log('订单创建成功:', orderData);
 
     // 构建支付宝请求参数
     const alipayParams = {
@@ -240,20 +244,15 @@ serve(async (req) => {
       notify_url: config.notify_url,
     };
 
-    console.log('支付宝请求参数:', alipayParams);
-
     // 生成签名字符串
     const signString = AlipayRSAUtils.buildSignString(alipayParams);
-    console.log('待签名字符串:', signString);
 
     // 导入私钥并签名
     let signature: string;
     try {
       const privateKey = await AlipayRSAUtils.importPrivateKey(config.alipay_private_key);
       signature = await AlipayRSAUtils.signRSA2(signString, privateKey);
-      console.log('生成签名成功');
     } catch (error) {
-      console.error('签名生成失败:', error);
       throw new Error('签名生成失败');
     }
 
@@ -271,8 +270,6 @@ serve(async (req) => {
       formData.append(key, finalParams[key as keyof typeof finalParams]);
     });
 
-    console.log('发送请求到支付宝:', alipayUrl);
-
     const alipayResponse = await fetch(alipayUrl, {
       method: 'POST',
       headers: {
@@ -282,11 +279,11 @@ serve(async (req) => {
     });
 
     if (!alipayResponse.ok) {
-      throw new Error(`支付宝API请求失败: ${alipayResponse.status}`);
+      const errorText = await alipayResponse.text();
+      throw new Error(`支付宝API请求失败: ${alipayResponse.status} - ${errorText}`);
     }
 
     const responseText = await alipayResponse.text();
-    console.log('支付宝响应:', responseText);
 
     // 解析支付宝响应
     let alipayResult;
@@ -294,12 +291,10 @@ serve(async (req) => {
       const responseJson = JSON.parse(responseText);
       alipayResult = responseJson.alipay_trade_precreate_response;
     } catch (error) {
-      console.error('解析支付宝响应失败:', error);
-      throw new Error('解析支付宝响应失败');
+      throw new Error(`解析支付宝响应失败: ${error.message}. 原始响应: ${responseText}`);
     }
 
     if (alipayResult.code !== '10000') {
-      console.error('支付宝返回错误:', alipayResult);
       throw new Error(`支付宝错误: ${alipayResult.msg || alipayResult.sub_msg}`);
     }
 
@@ -323,7 +318,6 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('创建支付宝订单失败:', error);
     return new Response(
       JSON.stringify({ 
         success: false, 

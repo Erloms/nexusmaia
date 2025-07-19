@@ -97,7 +97,25 @@ const Payment = () => {
         body: requestBody // Use the defined requestBody
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating Alipay order:', error);
+        // Attempt to parse the error message from the backend
+        let errorMessage = error.message || "创建支付订单时发生错误";
+        try {
+          const errorJson = JSON.parse(errorMessage);
+          if (errorJson.error) {
+            errorMessage = errorJson.error;
+          }
+        } catch (parseError) {
+          // Not a JSON error, use original message
+        }
+        toast({
+          title: "支付失败",
+          description: errorMessage,
+          variant: "destructive"
+        });
+        throw error; // Re-throw to ensure finally block runs
+      }
 
       setQrCodeUrl(data.qr_code_url);
       setShowPayment(true);
@@ -107,12 +125,8 @@ const Payment = () => {
       });
 
     } catch (error: any) {
-      console.error('Error creating Alipay order:', error);
-      toast({
-        title: "支付失败",
-        description: error.message || "创建支付订单时发生错误，请稍后再试",
-        variant: "destructive"
-      });
+      // Error already handled by toast above, just ensure loading state is reset
+      console.error('Caught error in handlePurchase:', error);
     } finally {
       setPaymentLoading(false);
     }
