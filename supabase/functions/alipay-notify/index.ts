@@ -1,5 +1,8 @@
+// @ts-ignore
 /// <reference lib="deno.ns" />
+// @ts-ignore
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
+// @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.9'
 
 // RSA2 签名和验签工具函数 (内联)
@@ -123,7 +126,9 @@ serve(async (req) => {
 
   try {
     const supabaseClient = createClient(
+      // @ts-ignore
       Deno.env.get('SUPABASE_URL') ?? '',
+      // @ts-ignore
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
