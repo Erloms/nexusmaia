@@ -1,4 +1,3 @@
-// @ts-ignore
 /// <reference lib="deno.ns" />
 // @ts-ignore
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
