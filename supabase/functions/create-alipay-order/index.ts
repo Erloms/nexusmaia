@@ -51,7 +51,14 @@ serve(async (req) => {
 
     // 2. Generate a unique internal order ID and Alipay's out_trade_no
     const orderId = uuidv4.generate();
-    const outTradeNo = `NEXUS-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`; // Alipay's out_trade_no
+    // Generate a unique order number for our system
+    const { data: orderNumberData, error: orderNumberError } = await supabaseClient.rpc('generate_order_number');
+    if (orderNumberError) {
+      console.error('Error generating order number:', orderNumberError);
+      throw new Error('Failed to generate unique order number.');
+    }
+    const orderNumber = orderNumberData;
+    const outTradeNo = orderNumber; // Use our internal order number as Alipay's out_trade_no
 
     // Determine order_type based on plan_id (using the placeholder IDs from SQL)
     let orderType = 'unknown';
@@ -76,6 +83,7 @@ serve(async (req) => {
         payment_id: outTradeNo, // Use outTradeNo as payment_id for now
         order_type: orderType,
         subject: subject,
+        order_number: orderNumber, // Save the generated order number
       })
       .select()
       .single();
@@ -120,11 +128,17 @@ serve(async (req) => {
       // 'sign' field will be added after signing
     };
 
-    // Example of how you might construct the string to be signed (simplified)
-    // const sortedKeys = Object.keys(alipayRequestParams).sort();
-    // const signContent = sortedKeys.map(key => `${key}=${alipayRequestParams[key]}`).join('&');
-    // const signature = await yourRsaSigningFunction(signContent, alipayConfig.alipay_private_key);
+    // --- RSA SIGNING PLACEHOLDER ---
+    // In a real production environment, you would use a library to perform RSA2 signing here.
+    // Example (conceptual):
+    // const signContent = Object.keys(alipayRequestParams)
+    //   .sort()
+    //   .filter(key => key !== 'sign' && key !== 'sign_type')
+    //   .map(key => `${key}=${alipayRequestParams[key]}`)
+    //   .join('&');
+    // const signature = await signWithRSA2(signContent, alipayConfig.alipay_private_key);
     // alipayRequestParams.sign = signature;
+    // --- END RSA SIGNING PLACEHOLDER ---
 
     // Simulate the actual Alipay API call and response for now
     // In a real scenario, you'd use `fetch` to send `alipayRequestParams` to `alipayConfig.alipay_gateway_url`
@@ -134,7 +148,7 @@ serve(async (req) => {
         code: '10000',
         msg: 'Success',
         out_trade_no: outTradeNo,
-        qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://example.com/alipay_mock_payment?order_id=${orderId}&amount=${amount}&user_id=${user_id}`, // This would be the actual QR code from Alipay
+        qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://example.com/alipay_mock_payment?order_id=${orderId}&amount=${amount}&user_id=${user_id}&out_trade_no=${outTradeNo}`, // This would be the actual QR code from Alipay
       },
       sign: 'SIMULATED_SIGNATURE', // This would be the actual signature from Alipay
     };
