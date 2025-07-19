@@ -7,19 +7,19 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Switch } from '@/components/ui/switch'; // Import Switch component
-import { supabase } from '@/integrations/supabase/client'; // Import supabase client
+import { Switch } from '@/components/ui/switch';
+import { supabase } from '@/integrations/supabase/client';
 
 const PaymentConfig = () => {
   const [config, setConfig] = useState({
     alipay_app_id: '',
     alipay_private_key: '',
     alipay_public_key: '',
-    app_public_key: '', // New field for app_public_key
+    app_public_key: '',
     alipay_gateway_url: 'https://openapi.alipay.com/gateway.do',
     notify_url: '',
     return_url: '',
-    is_sandbox: false, // New field for sandbox mode
+    is_sandbox: false,
   });
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -28,50 +28,51 @@ const PaymentConfig = () => {
   // Helper to ensure PEM format
   const ensurePemFormat = (key: string, type: 'private' | 'public' | 'app_public') => {
     if (!key) return '';
-    const cleanedKey = key.replace(/-----(BEGIN|END) (RSA )?(PRIVATE|PUBLIC) KEY-----/g, '').replace(/\s/g, '');
+
     let header = '';
     let footer = '';
-
     if (type === 'private') {
       header = '-----BEGIN PRIVATE KEY-----';
       footer = '-----END PRIVATE KEY-----';
-    } else if (type === 'public') {
+    } else if (type === 'public' || type === 'app_public') {
       header = '-----BEGIN PUBLIC KEY-----';
-      footer = '-----END PUBLIC KEY-----';
-    } else if (type === 'app_public') {
-      header = '-----BEGIN PUBLIC KEY-----'; // App Public Key also uses PUBLIC KEY header
       footer = '-----END PUBLIC KEY-----';
     }
 
-    if (cleanedKey.startsWith(header) && cleanedKey.endsWith(footer)) {
-      return key; // Already in correct format
-    }
-    // Add line breaks for readability within the PEM block
-    const formattedKey = cleanedKey.match(/.{1,64}/g)?.join('\n') || cleanedKey;
-    return `${header}\n${formattedKey}\n${footer}`;
+    // Remove existing headers/footers and all whitespace from the content
+    let cleanedContent = key
+      .replace(header, '')
+      .replace(footer, '')
+      .replace(/\s/g, ''); // Remove all whitespace from the base64 content
+
+    // Add line breaks every 64 characters for standard PEM formatting
+    const formattedContent = cleanedContent.match(/.{1,64}/g)?.join('\n') || cleanedContent;
+
+    return `${header}\n${formattedContent}\n${footer}`;
   };
 
   useEffect(() => {
     const fetchConfig = async () => {
       setLoading(true);
       try {
-        // Call the Supabase Edge Function directly
         const { data, error } = await supabase.functions.invoke('payment-config', {
           method: 'GET',
         });
 
         if (error) {
-          // If no config found (PGRST116), data will be null, which is handled by `data || {}`
-          // For other errors, throw it
-          if (error.status !== 404) { // 404 might indicate function not found or no data
+          if (error.status !== 404) {
             throw error;
           }
         }
         
         if (data) {
+          // Apply PEM formatting to keys when loading them from DB for display in Textarea
           setConfig(prevConfig => ({
             ...prevConfig,
-            ...data // Merge fetched data, keeping defaults if not present
+            ...data,
+            alipay_private_key: ensurePemFormat(data.alipay_private_key || '', 'private'),
+            alipay_public_key: ensurePemFormat(data.alipay_public_key || '', 'public'),
+            app_public_key: ensurePemFormat(data.app_public_key || '', 'app_public'),
           }));
         }
       } catch (error: any) {
@@ -109,10 +110,9 @@ const PaymentConfig = () => {
 
     setLoading(true);
     try {
-      // Call the Supabase Edge Function directly
       const { data, error } = await supabase.functions.invoke('payment-config', {
         method: 'POST',
-        body: formattedConfig // Send the entire formatted config object
+        body: formattedConfig
       });
 
       if (error) throw error;
@@ -122,6 +122,7 @@ const PaymentConfig = () => {
         description: "支付宝配置已更新",
       });
       // Update local state with the formatted keys after successful save
+      // This is important to ensure the displayed value is consistent with what's saved
       setConfig(formattedConfig);
     } catch (error: any) {
       console.error('Error saving payment config:', error);
@@ -173,7 +174,7 @@ const PaymentConfig = () => {
                 <div className="relative">
                   <Textarea
                     id="private_key"
-                    value={config.alipay_private_key}
+                    value={showPrivateKey ? config.alipay_private_key : config.alipay_private_key.replace(/./g, '*')}
                     onChange={(e) => setConfig({...config, alipay_private_key: e.target.value})}
                     placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
                     className="min-h-32 bg-[#14202c] border-[#2e4258] text-white"
@@ -285,7 +286,7 @@ const PaymentConfig = () => {
                   id="return_url"
                   value={config.return_url}
                   onChange={(e) => setConfig({...config, return_url: e.target.value})}
-                  placeholder="https://your-domain.com/payment/success"
+                  placeholder="https://your-app-domain.com/payment/success"
                   className="bg-[#14202c] border-[#2e4258] text-white"
                 />
                 <p className="text-xs text-gray-400 mt-1">
