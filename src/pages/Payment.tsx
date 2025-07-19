@@ -85,13 +85,16 @@ const Payment = () => {
     setQrCodeUrl(null);
 
     try {
+      const requestBody = {
+        subject: selectedPlan.name,
+        total_amount: Number(selectedPlan.price), // Ensure total_amount is a number
+        product_id: selectedPlan.id,
+      };
+      console.log('Sending request body to create-alipay-order:', requestBody); // Added log
+
       // Call the new Edge Function to create an Alipay order
       const { data, error } = await supabase.functions.invoke('create-alipay-order', {
-        body: {
-          subject: selectedPlan.name,
-          total_amount: Number(selectedPlan.price), // Ensure total_amount is a number
-          product_id: selectedPlan.id,
-        }
+        body: requestBody // Use the defined requestBody
       });
 
       if (error) throw error;

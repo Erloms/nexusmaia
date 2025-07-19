@@ -138,11 +138,15 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // 修正：正确解构请求体参数
+    // Clone the request to read body as text first for logging
+    const clonedReq = req.clone();
+    const rawBody = await clonedReq.text();
+    console.log('Raw request body received by Edge Function:', rawBody); // Added log
+
     const { subject, total_amount, product_id } = await req.json() as CreateOrderRequest;
 
     // 添加日志输出，检查接收到的参数
-    console.log('Received request body:', { subject, total_amount, product_id });
+    console.log('Parsed request body:', { subject, total_amount, product_id });
 
     // 修正：正确验证请求体参数
     if (!subject || total_amount === undefined || total_amount === null || !product_id) { // Explicitly check for total_amount
