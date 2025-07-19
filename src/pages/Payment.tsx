@@ -26,20 +26,23 @@ const Payment = () => {
   const [plans, setPlans] = useState<Record<string, PlanDetail>>({}); // State to store fetched plans
 
   useEffect(() => {
+    console.log('Payment component mounted. Calling fetchMembershipPlans...');
     const fetchMembershipPlans = async () => {
+      console.log('Inside fetchMembershipPlans. Attempting to fetch from Supabase...');
       const { data, error } = await supabase
         .from('membership_plans')
         .select('*')
         .eq('is_active', true);
 
       if (error) {
-        console.error('Error fetching membership plans:', error);
+        console.error('Error fetching membership plans from Supabase:', error);
         toast({
           title: "加载会员计划失败",
           description: "无法获取会员套餐信息",
           variant: "destructive"
         });
       } else {
+        console.log('Successfully fetched data from Supabase:', data);
         const fetchedPlans: Record<string, PlanDetail> = {};
         data.forEach(plan => {
           fetchedPlans[plan.type] = {
@@ -49,6 +52,7 @@ const Payment = () => {
           };
         });
         setPlans(fetchedPlans);
+        console.log('Plans state updated:', fetchedPlans);
       }
     };
 
@@ -118,6 +122,8 @@ const Payment = () => {
     setShowPayment(false);
     setQrCodeUrl(null);
   };
+
+  console.log('Rendering Payment component. Current plans state:', plans);
 
   // Ensure plans are loaded before rendering
   if (Object.keys(plans).length === 0) {
