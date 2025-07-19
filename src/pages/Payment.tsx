@@ -89,7 +89,7 @@ const Payment = () => {
       const { data, error } = await supabase.functions.invoke('create-alipay-order', {
         body: {
           subject: selectedPlan.name,
-          total_amount: selectedPlan.price,
+          total_amount: Number(selectedPlan.price), // Ensure total_amount is a number
           product_id: selectedPlan.id,
         }
       });

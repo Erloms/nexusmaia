@@ -141,8 +141,11 @@ serve(async (req) => {
     // 修正：正确解构请求体参数
     const { subject, total_amount, product_id } = await req.json() as CreateOrderRequest;
 
+    // 添加日志输出，检查接收到的参数
+    console.log('Received request body:', { subject, total_amount, product_id });
+
     // 修正：正确验证请求体参数
-    if (!subject || !total_amount || !product_id) {
+    if (!subject || total_amount === undefined || total_amount === null || !product_id) { // Explicitly check for total_amount
       return new Response(
         JSON.stringify({ error: 'Subject, total_amount, and product_id are required' }),
         { 
