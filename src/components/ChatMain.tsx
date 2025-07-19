@@ -25,6 +25,52 @@ interface ChatMainProps {
   onModelChange: (model: string) => void;
 }
 
+// Helper function to construct Pollinations.ai image URL based on detailed prompt rules
+const constructPollinationsImageUrl = (
+  basePrompt: string,
+  options?: {
+    sceneDetailed?: string;
+    adjective?: string;
+    charactersDetailed?: string;
+    visualStyle?: string;
+    genre?: string;
+    artistReference?: string;
+    model?: string;
+    width?: number;
+    height?: number;
+    seed?: string; // Allow specific seed
+  }
+) => {
+  let finalPrompt = basePrompt;
+
+  // Enhance basePrompt if it's too short (aim for ~50 words)
+  if (finalPrompt.split(' ').length < 10) { 
+    finalPrompt += ", highly detailed, cinematic lighting, vibrant colors, professional photography, 8k";
+  }
+
+  const parts = [
+    options?.sceneDetailed,
+    options?.adjective,
+    options?.charactersDetailed,
+    options?.visualStyle,
+    options?.genre,
+    options?.artistReference,
+  ].filter(Boolean); // Remove undefined/null parts
+
+  if (parts.length > 0) {
+    finalPrompt = `${finalPrompt}, ${parts.join(', ')}`;
+  }
+
+  const encodedPrompt = encodeURIComponent(finalPrompt);
+  const width = options?.width || 1024;
+  const height = options?.height || 768;
+  const model = options?.model || 'flux'; // Default to 'flux'
+  const seed = options?.seed || Math.floor(Math.random() * 1000000).toString(); // Use provided seed or generate random
+
+  return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&model=${model}&nologo=true`;
+};
+
+
 const ChatMain: React.FC<ChatMainProps> = ({
   messages,
   input,
@@ -79,11 +125,14 @@ const ChatMain: React.FC<ChatMainProps> = ({
     setIsGeneratingImage(true);
     
     try {
-      // 将中文提示词转换为英文
-      const encodedPrompt = encodeURIComponent(prompt);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=768&seed=${Math.floor(Math.random() * 100000)}&model=flux&nologo=true`;
+      // Use the helper function to construct the image URL
+      const imageUrl = constructPollinationsImageUrl(prompt, {
+        width: 1024, // Default width for chat images
+        height: 768, // Default height for chat images
+        model: 'flux', // Default model for chat images
+      });
       
-      // 添加图像消息
+      // Add image message
       const imageMessage: Message = {
         text: "为您生成的配图：",
         sender: "ai",
@@ -91,7 +140,8 @@ const ChatMain: React.FC<ChatMainProps> = ({
         imageUrl: imageUrl
       };
       
-      // 这里需要通过props传递给父组件
+      // This message needs to be added to the parent component's messages state
+      // For now, we'll just return it, assuming the parent will handle adding it.
       return imageMessage;
     } catch (error) {
       console.error('生成图像失败:', error);

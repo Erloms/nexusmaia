@@ -18,6 +18,51 @@ interface Message {
   imageUrl?: string; // For image messages
 }
 
+// Helper function to construct Pollinations.ai image URL based on detailed prompt rules
+const constructPollinationsImageUrl = (
+  basePrompt: string,
+  options?: {
+    sceneDetailed?: string;
+    adjective?: string;
+    charactersDetailed?: string;
+    visualStyle?: string;
+    genre?: string;
+    artistReference?: string;
+    model?: string;
+    width?: number;
+    height?: number;
+  }
+) => {
+  let finalPrompt = basePrompt;
+
+  // Enhance basePrompt if it's too short (aim for ~50 words)
+  if (finalPrompt.split(' ').length < 10) { 
+    finalPrompt += ", highly detailed, cinematic lighting, vibrant colors, professional photography, 8k";
+  }
+
+  const parts = [
+    options?.sceneDetailed,
+    options?.adjective,
+    options?.charactersDetailed,
+    options?.visualStyle,
+    options?.genre,
+    options?.artistReference,
+  ].filter(Boolean); // Remove undefined/null parts
+
+  if (parts.length > 0) {
+    finalPrompt = `${finalPrompt}, ${parts.join(', ')}`;
+  }
+
+  const encodedPrompt = encodeURIComponent(finalPrompt);
+  const width = options?.width || 1024;
+  const height = options?.height || 768;
+  const model = options?.model || 'flux'; // Default to 'flux'
+  const seed = Math.floor(Math.random() * 1000000); // Always generate a random seed for new images
+
+  return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&model=${model}&nologo=true`;
+};
+
+
 const Chat = () => {
   const { toast } = useToast();
   const { hasPermission, user } = useAuth();
@@ -191,37 +236,6 @@ const Chat = () => {
     }
   };
 
-  // Helper function to generate image using ZhipuAI Edge Function
-  const generateImageWithZhipu = async (imagePrompt: string, userId: string): Promise<string | null> => {
-    try {
-      const { data, error } = await supabase.functions.invoke('generate-image-zhipu', {
-        body: {
-          prompt: imagePrompt,
-          size: "1024x1024", // Default size for chat images
-          user_id: userId
-        }
-      });
-
-      if (error) {
-        console.error('Error calling generate-image-zhipu:', error);
-        toast({
-          title: "图片生成失败",
-          description: `无法生成图片: ${error.message}`,
-          variant: "destructive"
-        });
-        return null;
-      }
-
-      if (data && data.data && data.data.length > 0) {
-        return data.data[0].url;
-      }
-      return null;
-    } catch (err) {
-      console.error('Unexpected error in generateImageWithZhipu:', err);
-      return null;
-    }
-  };
-
   // 模拟智能体API调用
   const callAgentAPI = async (prompt: string, agentId: string): Promise<Message[]> => {
     setIsLoading(true);
@@ -229,48 +243,63 @@ const Chat = () => {
 
     try {
       if (agentId === 'xiaohongshu-strategist') {
-        const topic = prompt.replace('帮我分析', '').trim(); 
-        const userId = user?.id || 'anonymous';
+        const topic = prompt.replace('帮我分析', '').trim() || '小红书爆款笔记';
 
-        // Define image prompts for each section
+        // Image prompts for each section, following detailed structure
         const imagePrompts = {
-          emotional: "A cozy cat sleeping on a book, warm lighting, soft colors, high quality, no watermark",
-          practical: "A person studying analytics, vibrant colors, digital art, high quality, no watermark",
-          monetization: "A person counting money, surrounded by digital graphs, vibrant colors, abstract background, high quality, no watermark"
+          emotional: "A cozy cat sleeping on a book, warm lighting, soft colors, high quality, no watermark, emotional, comforting, soft focus, digital painting, by loish",
+          practical: "A person studying analytics, vibrant colors, digital art, high quality, no watermark, practical, insightful, clean lines, vector art, by piet mondrian",
+          monetization: "A person counting money, surrounded by digital graphs, vibrant colors, abstract background, high quality, no watermark, monetization, success, dynamic, abstract, by jackson pollock"
         };
 
-        // Generate images concurrently
+        // Generate images concurrently using Pollinations.ai
         const [
           imgUrl1, imgUrl2, imgUrl3, imgUrl4,
           imgUrl5, imgUrl6, imgUrl7, imgUrl8,
           imgUrl9, imgUrl10, imgUrl11, imgUrl12
         ] = await Promise.all([
-          generateImageWithZhipu(imagePrompts.emotional, userId),
-          generateImageWithZhipu(imagePrompts.emotional, userId),
-          generateImageWithZhipu(imagePrompts.emotional, userId),
-          generateImageWithZhipu(imagePrompts.emotional, userId),
-          generateImageWithZhipu(imagePrompts.practical, userId),
-          generateImageWithZhipu(imagePrompts.practical, userId),
-          generateImageWithZhipu(imagePrompts.practical, userId),
-          generateImageWithZhipu(imagePrompts.practical, userId),
-          generateImageWithZhipu(imagePrompts.monetization, userId),
-          generateImageWithZhipu(imagePrompts.monetization, userId),
-          generateImageWithZhipu(imagePrompts.monetization, userId),
-          generateImageWithZhipu(imagePrompts.monetization, userId),
+          constructPollinationsImageUrl(imagePrompts.emotional, { model: 'flux-realism', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.emotional, { model: 'flux-realism', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.emotional, { model: 'flux-realism', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.emotional, { model: 'flux-realism', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.practical, { model: 'flux', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.practical, { model: 'flux', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.practical, { model: 'flux', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.practical, { model: 'flux', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.monetization, { model: 'flux-cablyai', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.monetization, { model: 'flux-cablyai', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.monetization, { model: 'flux-cablyai', width: 1024, height: 768 }),
+          constructPollinationsImageUrl(imagePrompts.monetization, { model: 'flux-cablyai', width: 1024, height: 768 }),
         ]);
 
         // Construct messages with text and images
         generatedMessages.push({
           id: Date.now().toString() + '-text-intro',
           role: 'assistant',
-          content: `✨ **小红书爆款笔记生成** ✨\n\n---\n\n### 📝 **文案主题：** ${topic || '你的小红书爆款秘籍'}\n\n---\n\n#### **💡 爆款诊断与策略**\n根据你的需求，以下是小红书高互动笔记的3大核心策略：\n1.  **情绪共鸣：** 深入挖掘用户情感痛点，分享真实经历，引发读者共鸣和代入感。\n2.  **实用价值：** 提供具体、可操作的解决方案、教程或清单，让读者学到东西并能立即应用。\n3.  **视觉冲击：** 高质量的图片或视频是小红书的灵魂，结合内容主题，创造吸引眼球的视觉效果。\n\n---\n\n#### **✍️ 爆款文案模板（3套变体）**`,
+          content: `✨ **小红书爆款笔记生成** ✨\n\n---`,
+          timestamp: new Date(),
+          type: 'text'
+        });
+
+        generatedMessages.push({
+          id: Date.now().toString() + '-text-strategy',
+          role: 'assistant',
+          content: `### 📝 **文案主题：** ${topic}\n\n#### **💡 爆款诊断与核心策略**\n想要在小红书脱颖而出，以下3大核心策略助你打造高互动笔记：\n1.  **情绪共鸣：** 深入挖掘用户情感痛点，分享真实经历，引发读者共鸣和代入感。\n2.  **实用价值：** 提供具体、可操作的解决方案、教程或清单，让读者学到东西并能立即应用。\n3.  **视觉冲击：** 高质量的图片或视频是小红书的灵魂，结合内容主题，创造吸引眼球的视觉效果。\n\n---`,
+          timestamp: new Date(),
+          type: 'text'
+        });
+
+        generatedMessages.push({
+          id: Date.now().toString() + '-text-template-header',
+          role: 'assistant',
+          content: `#### **✍️ 爆款文案模板（3套变体）**`,
           timestamp: new Date(),
           type: 'text'
         });
 
         // 1. 情感共鸣型
         generatedMessages.push({
-          id: Date.now().toString() + '-text-emotional-intro',
+          id: Date.now().toString() + '-text-emotional-copy',
           role: 'assistant',
           content: `**1. 情感共鸣型：**\n**标题：** 💔 别再emo了！这几句话，治愈了我的小红书焦虑症！\n**正文：**\n姐妹们，是不是也和我一样，每次发小红书笔记都石沉大海？是不是总觉得自己不够好，笔记没人看？我懂你！曾经我也深陷这种情绪，直到我学会了这几招，瞬间被治愈！\n- 生活再难，也要给自己一点甜，小红书就是我的精神角落。\n- 你不是一个人在战斗，我们都在努力变好！\n- 相信自己，你的每一次分享都值得被看见！\n- 愿你的小红书，成为你温暖的避风港。\n**话题标签：** #小红书运营 #内容创作 #情绪价值 #自我成长 #治愈系\n**互动引导：** 评论区告诉我，你最近的“小确幸”是什么？👇`,
           timestamp: new Date(),
@@ -283,7 +312,7 @@ const Chat = () => {
 
         // 2. 实用干货型
         generatedMessages.push({
-          id: Date.now().toString() + '-text-practical-intro',
+          id: Date.now().toString() + '-text-practical-copy',
           role: 'assistant',
           content: `\n---\n\n**2. 实用干货型：**\n**标题：** 😱 震惊！我竟然靠这3招，让小红书笔记阅读量翻了10倍！\n**正文：**\n姐妹们，是不是也和我一样，每次发小红书笔记都石沉大海？别急！今天我把压箱底的爆款秘籍分享给你们，亲测有效！\n1.  **悬念钩子：** “你以为小红书只有颜值？错！这才是真正能让你涨粉的秘密武器！”\n2.  **数字清单：** “3个步骤，让你轻松打造高互动笔记，小白也能变大神！”\n3.  **身份认同：** “如果你也是内容创作者，这条笔记你一定要看完！”\n4.  **紧急感：** “再不学就晚了！小红书算法又变了，赶紧抓住这波红利！”\n**话题标签：** #小红书涨粉 #运营技巧 #干货分享 #自媒体 #流量变现\n**互动引导：** 收藏这篇笔记，下次发文不迷路！你还有哪些涨粉小技巧？评论区分享！👇`,
           timestamp: new Date(),
@@ -296,7 +325,7 @@ const Chat = () => {
 
         // 3. 商业变现型
         generatedMessages.push({
-          id: Date.now().toString() + '-text-monetization-intro',
+          id: Date.now().toString() + '-text-monetization-copy',
           role: 'assistant',
           content: `\n---\n\n**3. 商业变现型：**\n**标题：** 💰 0基础小白，30天小红书变现10000+，我做到了！\n**正文：**\n别再羡慕别人了！我一个普通人，只用了30天，就在小红书实现了月入过万！今天把我的秘诀毫无保留地分享给你！\n1.  **收益可视化：** “上个月我的小红书收益截图，真实数据，不P图！”\n2.  **素人可复制：** “我不是什么大V，普通人也能轻松上手，跟着我做就行！”\n3.  **步骤拆解：** “第一步：定位你的赛道；第二步：打造爆款内容；第三步：高效引流变现！”\n4.  **资源包钩子：** “评论区留言‘变现’，免费送你我的小红书变现秘籍资料包！”\n**话题标签：** #小红书变现 #副业赚钱 #0基础创业 #赚钱攻略 #个人IP\n**互动引导：** 想要这份变现资料包吗？点赞+关注，私信我“变现”即可领取！🚀`,
           timestamp: new Date(),
@@ -306,14 +335,6 @@ const Chat = () => {
         if (imgUrl10) generatedMessages.push({ id: Date.now().toString() + '-img-10', role: 'assistant', content: '配图2', imageUrl: imgUrl10, timestamp: new Date(), type: 'image' });
         if (imgUrl11) generatedMessages.push({ id: Date.now().toString() + '-img-11', role: 'assistant', content: '配图3', imageUrl: imgUrl11, timestamp: new Date(), type: 'image' });
         if (imgUrl12) generatedMessages.push({ id: Date.now().toString() + '-img-12', role: 'assistant', content: '配图4', imageUrl: imgUrl12, timestamp: new Date(), type: 'image' });
-
-        generatedMessages.push({
-          id: Date.now().toString() + '-text-footer',
-          role: 'assistant',
-          content: `\n---\n\n**👑 提示：**\n以上文案和配图仅为示例，您可以根据实际需求调整内容和图片提示词。智谱AI的 CogView-3-Flash 模型将为您生成高质量的无水印图片。`,
-          timestamp: new Date(),
-          type: 'text'
-        });
 
       } else if (agentId === 'code-generator') {
         generatedMessages.push({

@@ -11,6 +11,52 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 
+// Helper function to construct Pollinations.ai image URL based on detailed prompt rules
+const constructPollinationsImageUrl = (
+  basePrompt: string,
+  options?: {
+    sceneDetailed?: string;
+    adjective?: string;
+    charactersDetailed?: string;
+    visualStyle?: string;
+    genre?: string;
+    artistReference?: string;
+    model?: string;
+    width?: number;
+    height?: number;
+    seed?: string; // Allow specific seed
+  }
+) => {
+  let finalPrompt = basePrompt;
+
+  // Enhance basePrompt if it's too short (aim for ~50 words)
+  if (finalPrompt.split(' ').length < 10) { 
+    finalPrompt += ", highly detailed, cinematic lighting, vibrant colors, professional photography, 8k";
+  }
+
+  const parts = [
+    options?.sceneDetailed,
+    options?.adjective,
+    options?.charactersDetailed,
+    options?.visualStyle,
+    options?.genre,
+    options?.artistReference,
+  ].filter(Boolean); // Remove undefined/null parts
+
+  if (parts.length > 0) {
+    finalPrompt = `${finalPrompt}, ${parts.join(', ')}`;
+  }
+
+  const encodedPrompt = encodeURIComponent(finalPrompt);
+  const width = options?.width || 1024;
+  const height = options?.height || 768;
+  const model = options?.model || 'flux'; // Default to 'flux'
+  const seed = options?.seed || Math.floor(Math.random() * 1000000).toString(); // Use provided seed or generate random
+
+  return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&model=${model}&nologo=true`;
+};
+
+
 const Image = () => {
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('pixelated, poor lighting, overexposed, underexposed, chinese text, asian text, chinese characters, cropped, duplicated, ugly, extra fingers, bad hands, missing fingers, mutated hands');
@@ -157,11 +203,15 @@ const Image = () => {
       const currentSeed = useNewSeed ? generateRandomSeed() : seed; // Use new seed or existing
       const dimensions = getDimensions();
       
-      // 构建 Pollinations.ai URL
-      const encodedPrompt = encodeURIComponent(prompt);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${dimensions.width}&height=${dimensions.height}&seed=${currentSeed}&model=${selectedModel}&nologo=true`;
+      // Construct Pollinations.ai URL using the helper function
+      const imageUrl = constructPollinationsImageUrl(prompt, {
+        width: dimensions.width,
+        height: dimensions.height,
+        model: selectedModel,
+        seed: currentSeed,
+      });
       
-      // 模拟加载延迟，让用户看到生成过程
+      // Simulate loading delay, allowing user to see generation process
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       setGeneratedImage(imageUrl);
@@ -256,7 +306,10 @@ const Image = () => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error calling generate-video:', error);
+        throw new Error(error.message || "视频生成Edge Function调用失败");
+      }
 
       const taskId = data.id;
       setVideoTaskId(taskId);
