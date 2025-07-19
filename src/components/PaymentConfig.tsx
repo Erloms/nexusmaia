@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch'; // Import Switch component
 import { supabase } from '@/integrations/supabase/client'; // Import supabase client
 
 const PaymentConfig = () => {
@@ -14,9 +15,11 @@ const PaymentConfig = () => {
     alipay_app_id: '',
     alipay_private_key: '',
     alipay_public_key: '',
+    app_public_key: '', // New field for app_public_key
     alipay_gateway_url: 'https://openapi.alipay.com/gateway.do',
     notify_url: '',
-    return_url: ''
+    return_url: '',
+    is_sandbox: false, // New field for sandbox mode
   });
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -128,7 +131,6 @@ const PaymentConfig = () => {
                     onChange={(e) => setConfig({...config, alipay_private_key: e.target.value})}
                     placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
                     className="min-h-32 bg-[#14202c] border-[#2e4258] text-white"
-                    // Removed the 'type' prop as Textarea does not support it
                   />
                   <Button
                     type="button"
@@ -143,14 +145,31 @@ const PaymentConfig = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="public_key" className="text-white">支付宝公钥 (Alipay Public Key)</Label>
+                <Label htmlFor="app_public_key" className="text-white">应用公钥 (App Public Key)</Label>
                 <Textarea
-                  id="public_key"
+                  id="app_public_key"
+                  value={config.app_public_key || ''} // Ensure it's not null
+                  onChange={(e) => setConfig({...config, app_public_key: e.target.value})}
+                  placeholder="-----BEGIN PUBLIC KEY-----&#10;...&#10;-----END PUBLIC KEY-----"
+                  className="min-h-32 bg-[#14202c] border-[#2e4258] text-white"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  这是您在支付宝开放平台上传的**应用公钥**，用于支付宝验证您的请求签名。
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="alipay_public_key" className="text-white">支付宝公钥 (Alipay Public Key)</Label>
+                <Textarea
+                  id="alipay_public_key"
                   value={config.alipay_public_key}
                   onChange={(e) => setConfig({...config, alipay_public_key: e.target.value})}
                   placeholder="-----BEGIN PUBLIC KEY-----&#10;...&#10;-----END PUBLIC KEY-----"
                   className="min-h-32 bg-[#14202c] border-[#2e4258] text-white"
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  这是支付宝提供给您的**支付宝公钥**，用于您验证支付宝的回调通知签名。
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -161,6 +180,30 @@ const PaymentConfig = () => {
                   onChange={(e) => setConfig({...config, alipay_gateway_url: e.target.value})}
                   placeholder="https://openapi.alipay.com/gateway.do"
                   className="bg-[#14202c] border-[#2e4258] text-white"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  支付宝官方API网关地址，生产环境通常为 `https://openapi.alipay.com/gateway.do`。
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between space-x-2">
+                <Label htmlFor="is_sandbox" className="text-white">沙箱模式</Label>
+                <Switch
+                  id="is_sandbox"
+                  checked={config.is_sandbox}
+                  onCheckedChange={(checked) => {
+                    setConfig(prev => ({
+                      ...prev,
+                      is_sandbox: checked,
+                      alipay_gateway_url: checked 
+                        ? 'https://openapi.alipaydev.com/gateway.do' 
+                        : 'https://openapi.alipay.com/gateway.do'
+                    }));
+                    toast({
+                      title: "沙箱模式切换",
+                      description: `已切换到${checked ? '沙箱环境' : '生产环境'}，网关地址已自动更新。`,
+                    });
+                  }}
                 />
               </div>
             </CardContent>
@@ -185,6 +228,9 @@ const PaymentConfig = () => {
                   placeholder="https://your-domain.com/api/alipay/notify"
                   className="bg-[#14202c] border-[#2e4258] text-white"
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  支付宝会向此地址发送异步支付结果通知。
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -196,6 +242,9 @@ const PaymentConfig = () => {
                   placeholder="https://your-domain.com/payment/success"
                   className="bg-[#14202c] border-[#2e4258] text-white"
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  用户支付完成后，支付宝会同步重定向到此地址。
+                </p>
               </div>
             </CardContent>
           </Card>

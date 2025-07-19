@@ -332,6 +332,7 @@ export type Database = {
           subject: string | null;
           created_at: string | null;
           updated_at: string | null;
+          order_number: string | null; // Added order_number
         };
         Insert: {
           id?: string;
@@ -345,6 +346,7 @@ export type Database = {
           subject?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
+          order_number?: string | null; // Added order_number
         };
         Update: {
           id?: string;
@@ -358,6 +360,7 @@ export type Database = {
           subject?: string | null;
           created_at?: string | null;
           updated_at?: string | null;
+          order_number?: string | null; // Added order_number
         };
         Relationships: [
           {
@@ -387,6 +390,8 @@ export type Database = {
           return_url: string;
           created_at: string;
           updated_at: string;
+          is_sandbox: boolean | null; // Added is_sandbox
+          app_public_key: string | null; // Added app_public_key
         };
         Insert: {
           id?: string;
@@ -398,6 +403,8 @@ export type Database = {
           return_url: string;
           created_at?: string;
           updated_at?: string;
+          is_sandbox?: boolean | null; // Added is_sandbox
+          app_public_key?: string | null; // Added app_public_key
         };
         Update: {
           alipay_app_id?: string;
@@ -408,6 +415,8 @@ export type Database = {
           return_url?: string;
           created_at?: string;
           updated_at?: string;
+          is_sandbox?: boolean | null; // Added is_sandbox
+          app_public_key?: string | null; // Added app_public_key
         };
         Relationships: [];
       };

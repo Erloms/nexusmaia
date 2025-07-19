@@ -27,7 +27,16 @@ serve(async (req) => {
 
   try {
     if (req.method === 'POST') {
-      const { alipay_app_id, alipay_private_key, alipay_public_key, alipay_gateway_url, notify_url, return_url } = await req.json();
+      const { 
+        alipay_app_id, 
+        alipay_private_key, 
+        alipay_public_key, 
+        app_public_key, // New field
+        alipay_gateway_url, 
+        notify_url, 
+        return_url,
+        is_sandbox // New field
+      } = await req.json();
 
       // Always upsert (insert or update) a single config entry
       const { data, error } = await supabaseClient
@@ -37,9 +46,11 @@ serve(async (req) => {
           alipay_app_id,
           alipay_private_key,
           alipay_public_key,
+          app_public_key, // Save new field
           alipay_gateway_url,
           notify_url,
           return_url,
+          is_sandbox, // Save new field
           updated_at: new Date().toISOString(),
         }, { onConflict: 'id' })
         .select()
