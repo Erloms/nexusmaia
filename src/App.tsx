@@ -19,8 +19,8 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <Sonner /> {/* 将 Sonner 移到 TooltipProvider 外部 */}
     <TooltipProvider>
-      <Sonner />
       <BrowserRouter>
         <AuthProvider>
           <Routes>
