@@ -2,11 +2,48 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
+// @ts-ignore
+import { crypto } from "https://deno.land/std@0.224.0/crypto/mod.ts";
+// @ts-ignore
+import { decode as base64decode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Helper function to sort and concatenate parameters for verification
+function getVerifyContent(params: URLSearchParams): string {
+  const sortedKeys = Array.from(params.keys()).sort();
+  let content = '';
+  for (const key of sortedKeys) {
+    const value = params.get(key);
+    if (value !== null && key !== 'sign' && key !== 'sign_type') {
+      content += `${key}=${value}&`;
+    }
+  }
+  return content.slice(0, -1); // Remove trailing '&'
+}
+
+// TODO: REAL RSA VERIFICATION HERE
+// This is a conceptual placeholder. You need to implement actual RSA2 (SHA256WithRSA) verification.
+// This typically involves:
+// 1. Converting alipay_public_key (PEM format) to a CryptoKey.
+// 2. Hashing the content with SHA256.
+// 3. Verifying the signature against the hash using the public key and 'RSASSA-PKCS1-v1_5' algorithm.
+// You might need a Deno-compatible RSA library for this (e.g., from deno.land/x).
+async function verifyWithRSA2(content: string, signature: string, publicKeyPem: string): Promise<boolean> {
+  // This is a mock implementation. DO NOT USE IN PRODUCTION.
+  console.warn("WARNING: Using mock RSA verification. Replace with real implementation in production!");
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const expectedHash = await crypto.subtle.digest("SHA-256", data);
+  const decodedSignature = base64decode(signature);
+
+  // In a real scenario, you'd compare expectedHash with the result of verifying decodedSignature
+  // using the publicKeyPem. For this mock, we just check if the decoded signature has some length.
+  return decodedSignature.byteLength > 0; 
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -53,28 +90,17 @@ serve(async (req) => {
     }
 
     // --- IMPORTANT: REAL ALIPAY SIGNATURE VERIFICATION GOES HERE ---
-    // In a real production environment, you MUST implement robust signature verification.
-    // This involves:
-    // 1. Reconstructing the string to be signed from the received parameters.
-    //    Exclude 'sign' and 'sign_type' from the parameters used for signing.
-    //    Parameters should be sorted alphabetically and concatenated in 'key=value&' format.
-    // 2. Using Alipay's public key (alipayConfig.alipay_public_key) to verify the 'sign' parameter
-    //    against the reconstructed string. The algorithm should be RSA2 (SHA256WithRSA).
-    //    You will likely need a Deno-compatible RSA verification library for this.
-    // 3. Also verify `app_id` from the notification matches your configured `alipayConfig.alipay_app_id`.
-    // 4. Check `seller_id` if applicable.
-    // If verification fails, return 'fail'.
-
-    // Example of how you might prepare parameters for verification (simplified)
-    // const paramsToVerify = new URLSearchParams(requestBody);
-    // paramsToVerify.delete('sign');
-    // paramsToVerify.delete('sign_type');
-    // const sortedKeys = Array.from(paramsToVerify.keys()).sort();
-    // const verifyContent = sortedKeys.map(key => `${key}=${paramsToVerify.get(key)}`).join('&');
-    // const isSignatureValid = await yourRsaVerificationFunction(verifyContent, sign, alipayConfig.alipay_public_key, sign_type);
-
-    const isSignatureValid = true; // Placeholder: Replace with actual verification logic
+    // TODO: REAL RSA VERIFICATION HERE
+    // Replace this with a robust RSA2 verification implementation using alipayConfig.alipay_public_key
+    // For production, you MUST use a secure cryptographic library.
+    const verifyContent = getVerifyContent(params);
+    const isSignatureValid = await verifyWithRSA2(verifyContent, sign || '', alipayConfig.alipay_public_key);
     const isAppIdValid = (app_id === alipayConfig.alipay_app_id); // Verify app_id
+
+    console.log("Verify content:", verifyContent);
+    console.log("Received signature:", sign);
+    console.log("Is signature valid (mock):", isSignatureValid);
+    console.log("Is App ID valid:", isAppIdValid);
 
     if (!isSignatureValid || !isAppIdValid) {
       console.error('Alipay notification: Signature or App ID verification failed.');

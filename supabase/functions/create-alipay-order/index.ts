@@ -4,11 +4,46 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
 // @ts-ignore
 import { v4 as uuidv4 } from "https://deno.land/std@0.224.0/uuid/mod.ts";
+// @ts-ignore
+import { encode as base64encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+// @ts-ignore
+import { crypto } from "https://deno.land/std@0.224.0/crypto/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Helper function to sort and concatenate parameters for signing
+function getSignContent(params: Record<string, any>): string {
+  const sortedKeys = Object.keys(params).sort();
+  let content = '';
+  for (const key of sortedKeys) {
+    const value = params[key];
+    if (value !== null && value !== undefined && key !== 'sign' && key !== 'sign_type') {
+      content += `${key}=${value}&`;
+    }
+  }
+  return content.slice(0, -1); // Remove trailing '&'
+}
+
+// TODO: REAL RSA SIGNING HERE
+// This is a conceptual placeholder. You need to implement actual RSA2 (SHA256WithRSA) signing.
+// This typically involves:
+// 1. Converting alipay_private_key (PEM format) to a CryptoKey.
+// 2. Hashing the content with SHA256.
+// 3. Signing the hash with the private key using 'RSASSA-PKCS1-v1_5' algorithm.
+// 4. Base64 encoding the signature.
+// You might need a Deno-compatible RSA library for this (e.g., from deno.land/x).
+async function signWithRSA2(content: string, privateKeyPem: string): Promise<string> {
+  // This is a mock implementation. DO NOT USE IN PRODUCTION.
+  // In a real scenario, you'd parse the PEM key, import it, and use crypto.subtle.sign.
+  console.warn("WARNING: Using mock RSA signing. Replace with real implementation in production!");
+  const encoder = new TextEncoder();
+  const data = encoder.encode(content);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return base64encode(hash); // This is NOT a real RSA signature, just a base64 encoded hash.
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -93,24 +128,8 @@ serve(async (req) => {
       throw new Error('Failed to create order in database.');
     }
 
-    // --- IMPORTANT: REAL ALIPAY API CALL AND RSA2 SIGNING GOES HERE ---
-    // This is the most complex part. You need to:
-    // 1. Construct the request parameters for Alipay's API (e.g., alipay.trade.precreate for QR code).
-    //    Parameters include: app_id, method, charset, sign_type, timestamp, version, biz_content, notify_url, return_url.
-    // 2. The `biz_content` should be a JSON string containing: out_trade_no, total_amount, subject, product_code (e.g., 'FACE_TO_FACE_PAYMENT').
-    // 3. **Sign** these parameters using your `alipayConfig.alipay_private_key` with RSA2 (SHA256WithRSA) algorithm.
-    //    This typically involves:
-    //    a. Sorting all request parameters (excluding 'sign' and 'sign_type') alphabetically.
-    //    b. Concatenating them into a string like "key1=value1&key2=value2...".
-    //    c. Hashing this string with SHA256.
-    //    d. Signing the hash with your RSA private key.
-    //    e. Base64 encoding the signature.
-    //    You will likely need a Deno-compatible RSA signing library for this.
-    // 4. Send the signed request to `alipayConfig.alipay_gateway_url`.
-    // 5. Parse Alipay's response to get the actual QR code URL or redirect form data.
-
-    // Placeholder for Alipay request parameters
-    const alipayRequestParams = {
+    // --- Construct Alipay Request Parameters ---
+    const alipayRequestParams: Record<string, any> = {
       app_id: alipayConfig.alipay_app_id,
       method: 'alipay.trade.precreate', // For QR code payment
       charset: 'utf-8',
@@ -123,34 +142,33 @@ serve(async (req) => {
         subject: subject,
         product_code: 'FACE_TO_FACE_PAYMENT', // For QR code payment
       }),
-      notify_url: notify_url,
-      return_url: return_url,
-      // 'sign' field will be added after signing
+      notify_url: alipayConfig.notify_url, // Use configured notify_url
+      return_url: alipayConfig.return_url, // Use configured return_url
     };
 
-    // --- RSA SIGNING PLACEHOLDER ---
-    // In a real production environment, you would use a library to perform RSA2 signing here.
-    // Example (conceptual):
-    // const signContent = Object.keys(alipayRequestParams)
-    //   .sort()
-    //   .filter(key => key !== 'sign' && key !== 'sign_type')
-    //   .map(key => `${key}=${alipayRequestParams[key]}`)
-    //   .join('&');
-    // const signature = await signWithRSA2(signContent, alipayConfig.alipay_private_key);
-    // alipayRequestParams.sign = signature;
-    // --- END RSA SIGNING PLACEHOLDER ---
+    // --- RSA SIGNING ---
+    // TODO: REAL RSA SIGNING HERE
+    // Replace this with a robust RSA2 signing implementation using alipayConfig.alipay_private_key
+    // For production, you MUST use a secure cryptographic library.
+    const signContent = getSignContent(alipayRequestParams);
+    const signature = await signWithRSA2(signContent, alipayConfig.alipay_private_key);
+    alipayRequestParams.sign = signature;
 
-    // Simulate the actual Alipay API call and response for now
-    // In a real scenario, you'd use `fetch` to send `alipayRequestParams` to `alipayConfig.alipay_gateway_url`
-    // and handle the real response.
+    // --- Send Request to Alipay (Simulated for now) ---
+    // In a real scenario, you'd send alipayRequestParams to alipayConfig.alipay_gateway_url
+    // using fetch and parse the real response.
+    console.log("Simulating Alipay API call with params:", alipayRequestParams);
+    console.log("Simulated sign content:", signContent);
+
     const realAlipayApiCallResult = {
       alipay_trade_precreate_response: {
         code: '10000',
         msg: 'Success',
         out_trade_no: outTradeNo,
-        qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://example.com/alipay_mock_payment?order_id=${orderId}&amount=${amount}&user_id=${user_id}&out_trade_no=${outTradeNo}`, // This would be the actual QR code from Alipay
+        // This QR code URL is a placeholder. In production, it comes from Alipay's response.
+        qr_code: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://example.com/alipay_mock_payment?order_id=${orderId}&amount=${amount}&user_id=${user_id}&out_trade_no=${outTradeNo}`, 
       },
-      sign: 'SIMULATED_SIGNATURE', // This would be the actual signature from Alipay
+      sign: 'SIMULATED_ALIPAY_SIGNATURE', // This would be the actual signature from Alipay
     };
 
     if (realAlipayApiCallResult.alipay_trade_precreate_response.code !== '10000') {
