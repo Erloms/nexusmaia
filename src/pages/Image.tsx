@@ -36,7 +36,13 @@ const Image = () => {
     { id: 'flux-anime', name: '动漫风格', description: 'Flux Anime - 动漫二次元' },
     { id: 'flux-3d', name: '三维效果', description: 'Flux 3D - 立体三维' },
     { id: 'flux-cablyai', name: '创意艺术', description: 'Flux CablyAI - 创意艺术' },
-    { id: 'turbo', name: '极速生成', description: 'Turbo - 快速生成' }
+    { id: 'turbo', name: '极速生成', description: 'Turbo - 快速生成' },
+    // 新增更多模型
+    { id: 'stable-diffusion-xl', name: 'Stable Diffusion XL', description: '高质量通用模型' },
+    { id: 'dall-e-3', name: 'DALL-E 3', description: 'OpenAI最新图像模型' },
+    { id: 'midjourney-v6', name: 'Midjourney V6', description: '艺术风格强大' },
+    { id: 'playground-v2.5', name: 'Playground V2.5', description: '快速迭代创意' },
+    { id: 'kandinsky-3', name: 'Kandinsky 3', description: '多语言图像生成' },
   ];
 
   // 视频魔法效果选项

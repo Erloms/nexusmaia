@@ -52,6 +52,19 @@ const Chat = () => {
     { id: "tencent/hunyuan-a13b-instruct:free", name: "Hunyuan A13B Instruct" },
     { id: "google/gemini-2.0-flash-exp:free", name: "Gemini 2.0 Flash Exp" },
     { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B Instruct" },
+    // 更多最新模型
+    { id: "mistralai/mixtral-8x22b-instruct", name: "Mixtral 8x22B Instruct" },
+    { id: "google/gemini-pro", name: "Gemini Pro" },
+    { id: "openai/gpt-4-turbo", name: "GPT-4 Turbo" },
+    { id: "anthropic/claude-3-opus", name: "Claude 3 Opus" },
+    { id: "anthropic/claude-3-sonnet", name: "Claude 3 Sonnet" },
+    { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku" },
+    { id: "perplexity/llama-3-8b-instruct", name: "Llama 3 8B Instruct" },
+    { id: "perplexity/llama-3-70b-instruct", name: "Llama 3 70B Instruct" },
+    { id: "databricks/dbrx-instruct", name: "DBRX Instruct" },
+    { id: "nousresearch/nous-hermes-2-mixtral-8x7b-dpo", name: "Nous Hermes 2 Mixtral" },
+    { id: "openrouter/cinematika-7b", name: "Cinematika 7B" },
+    { id: "openrouter/auto", name: "OpenRouter Auto (Best)" },
   ];
 
   // AI智能体列表
