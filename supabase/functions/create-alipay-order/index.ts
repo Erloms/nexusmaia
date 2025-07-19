@@ -9,7 +9,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.9'
 class AlipayRSAUtils {
   
   // 将 PEM 格式的私钥转换为 CryptoKey
-  // 确保私钥是 PKCS8 格式，并包含 BEGIN/END 头部和尾部。
   static async importPrivateKey(pemKey: string): Promise<CryptoKey> {
     // 清理 PEM 格式
     const pemHeader = "-----BEGIN PRIVATE KEY-----";
@@ -36,13 +35,12 @@ class AlipayRSAUtils {
   }
 
   // 将 PEM 格式的公钥转换为 CryptoKey
-  // 确保公钥是 SPKI 格式，并包含 BEGIN/END 头部和尾部。
   static async importPublicKey(pemKey: string): Promise<CryptoKey> {
     // 清理 PEM 格式
     const pemHeader = "-----BEGIN PUBLIC KEY-----";
     const pemFooter = "-----END PUBLIC KEY-----";
     const pemContents = pemKey
-      .replace(pemHeader, "")
+      .replace(pemHeader, "",)
       .replace(pemFooter, "")
       .replace(/\s/g, "");
     
@@ -145,26 +143,12 @@ serve(async (req) => {
     let requestBody: CreateOrderRequest;
     let rawBody: string;
     try {
-      // Try to read raw body first
       rawBody = await req.text();
-      try {
-        requestBody = JSON.parse(rawBody);
-      } catch (parseError) {
-        // If JSON parsing fails, return specific error
-        console.error('JSON parsing error:', parseError, 'Raw body:', rawBody);
-        return new Response(
-          JSON.stringify({ error: `Invalid JSON in request body: ${parseError.message}. Raw body: ${rawBody}` }),
-          { 
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
-      }
-    } catch (readError) {
-      // If reading raw body fails (e.g., stream already consumed), return specific error
-      console.error('Failed to read request body:', readError);
+      requestBody = JSON.parse(rawBody);
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError, 'Raw body:', rawBody);
       return new Response(
-        JSON.stringify({ error: `Failed to read request body: ${readError.message}` }),
+        JSON.stringify({ error: `Invalid JSON in request body: ${parseError.message}. Raw body: ${rawBody}` }),
         { 
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -175,8 +159,7 @@ serve(async (req) => {
     const { subject, total_amount, product_id } = requestBody;
     console.log('Received request for order creation:', { subject, total_amount, product_id });
 
-    // 修正：正确验证请求体参数
-    if (!subject || total_amount === undefined || total_amount === null || !product_id) { // Explicitly check for total_amount
+    if (!subject || total_amount === undefined || total_amount === null || !product_id) {
       console.error('Missing required parameters in request body:', { subject, total_amount, product_id });
       return new Response(
         JSON.stringify({ error: 'Subject, total_amount, and product_id are required' }),
@@ -187,7 +170,6 @@ serve(async (req) => {
       )
     }
 
-    // 获取当前用户
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       console.error('Missing Authorization header');
@@ -203,7 +185,6 @@ serve(async (req) => {
     }
     console.log('Authenticated user:', user.id);
 
-    // 获取支付宝配置
     const { data: config, error: configError } = await supabaseClient
       .from('payment_configs')
       .select('*')
@@ -216,11 +197,19 @@ serve(async (req) => {
     }
     console.log('Fetched Alipay config:', config);
 
-    // 生成订单号
+    // **修正逻辑：根据 is_sandbox 强制设置正确的网关地址**
+    let alipayGatewayUrl = config.alipay_gateway_url;
+    if (config.is_sandbox) {
+      alipayGatewayUrl = 'https://openapi.alipaydev.com/gateway.do';
+      console.log('Sandbox mode is ON. Using sandbox gateway URL:', alipayGatewayUrl);
+    } else {
+      alipayGatewayUrl = 'https://openapi.alipay.com/gateway.do';
+      console.log('Sandbox mode is OFF. Using production gateway URL:', alipayGatewayUrl);
+    }
+
     const orderNumber = `ORD${Date.now()}${Math.floor(Math.random() * 1000)}`;
     console.log('Generated order number:', orderNumber);
 
-    // 创建订单记录
     const { data: orderData, error: orderError } = await supabaseClient
       .from('orders')
       .insert({
@@ -237,12 +226,10 @@ serve(async (req) => {
 
     if (orderError) {
       console.error('Supabase order insert error:', orderError);
-      // 改进错误信息，直接返回 Supabase 错误详情
-      throw new Error(`Supabase订单插入失败: ${orderError.message}`);
+      throw new Error('创建订单失败');
     }
     console.log('Order created in Supabase:', orderData);
 
-    // 构建支付宝请求参数
     const alipayParams = {
       app_id: config.alipay_app_id,
       method: 'alipay.trade.precreate',
@@ -260,37 +247,38 @@ serve(async (req) => {
     };
     console.log('Alipay request parameters:', alipayParams);
 
-    // 生成签名字符串
     const signString = AlipayRSAUtils.buildSignString(alipayParams);
     console.log('Sign string for Alipay:', signString);
 
-    // 导入私钥并签名
-    let signature: string;
+    let privateKey: CryptoKey;
     try {
-      const privateKey = await AlipayRSAUtils.importPrivateKey(config.alipay_private_key);
-      signature = await AlipayRSAUtils.signRSA2(signString, privateKey);
-      console.log('Generated signature:', signature);
-    } catch (error) {
-      console.error('Signature generation failed:', error);
-      throw new Error('签名生成失败');
+      privateKey = await AlipayRSAUtils.importPrivateKey(config.alipay_private_key);
+    } catch (keyError: any) {
+      console.error('Error importing private key:', keyError);
+      throw new Error(`私钥导入失败，请检查私钥格式是否正确 (PKCS8) 或有无多余字符: ${keyError.message}`);
     }
 
-    // 添加签名到参数
+    let signature: string;
+    try {
+      signature = await AlipayRSAUtils.signRSA2(signString, privateKey);
+    } catch (signError: any) {
+      console.error('Error signing data:', signError);
+      throw new Error(`签名生成失败，请检查私钥是否有效或与应用ID匹配: ${signError.message}`);
+    }
+
     const finalParams = {
       ...alipayParams,
       sign: signature
     };
 
-    // 发送请求到支付宝
-    const alipayUrl = config.alipay_gateway_url;
     const formData = new URLSearchParams();
     
     Object.keys(finalParams).forEach(key => {
       formData.append(key, finalParams[key as keyof typeof finalParams]);
     });
-    console.log('Sending request to Alipay URL:', alipayUrl, 'with form data:', formData.toString());
+    console.log('Sending request to Alipay URL:', alipayGatewayUrl, 'with form data:', formData.toString());
 
-    const alipayResponse = await fetch(alipayUrl, {
+    const alipayResponse = await fetch(alipayGatewayUrl, { // **使用修正后的网关地址**
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -307,13 +295,12 @@ serve(async (req) => {
     const responseText = await alipayResponse.text();
     console.log('Raw Alipay response:', responseText);
 
-    // 解析支付宝响应
     let alipayResult;
     try {
       const responseJson = JSON.parse(responseText);
       alipayResult = responseJson.alipay_trade_precreate_response;
       console.log('Parsed Alipay result:', alipayResult);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to parse Alipay response:', error, 'Raw response:', responseText);
       throw new Error(`解析支付宝响应失败: ${error.message}. 原始响应: ${responseText}`);
     }
@@ -323,14 +310,12 @@ serve(async (req) => {
       throw new Error(`支付宝错误: ${alipayResult.msg || alipayResult.sub_msg}`);
     }
 
-    // 更新订单的支付ID
     await supabaseClient
       .from('orders')
       .update({ payment_id: alipayResult.out_trade_no })
       .eq('id', orderData.id);
     console.log('Order updated with payment_id:', alipayResult.out_trade_no);
 
-    // 返回二维码链接
     return new Response(
       JSON.stringify({
         success: true,
@@ -348,7 +333,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error instanceof Error ? error.message : '未知错误，创建订单失败' 
+        error: error instanceof Error ? error.message : '创建订单失败' 
       }),
       { 
         status: 400,
