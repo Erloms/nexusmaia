@@ -77,15 +77,23 @@ const Chat = () => {
   // OpenRouter API Key (In a real application, this should be an environment variable or managed securely)
   const OPENROUTER_API_KEY = "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"; // Updated API Key
 
-  // AI大模型列表 (移除来源信息)
+  // AI大模型列表 (包含Pollinations.ai和OpenRouter模型)
   const aiTextModels = [
-    { id: "gpt-4o-mini", name: "GPT-4o-mini" },
-    { id: "llama", name: "Llama 3.3 70B" },
-    { id: "mistral", name: "Mistral Nemo" },
-    { id: "deepseek", name: "DeepSeek-V3" },
-    { id: "deepseek-r1", name: "DeepSeek-R1 Distill Qwen 32B" },
-    { id: "phi", name: "Phi-4 Multimodal Instruct" },
-    { id: "qwen-coder", name: "Qwen 2.5 Coder 32B" },
+    { id: "gpt-4o-mini", name: "GPT-4o-mini" }, // Pollinations.ai
+    { id: "gpt-4o", name: "GPT-4o" }, // Pollinations.ai
+    { id: "o1-mini", name: "o1-mini" }, // Pollinations.ai
+    { id: "llama", name: "Llama 3.3 70B" }, // Pollinations.ai
+    { id: "llamalight", name: "Llama 3.1 8B Instruct" }, // Pollinations.ai
+    { id: "mistral", name: "Mistral Nemo" }, // Pollinations.ai
+    { id: "deepseek", name: "DeepSeek-V3" }, // Pollinations.ai
+    { id: "deepseek-r1", name: "DeepSeek-R1 Distill Qwen 32B" }, // Pollinations.ai
+    { id: "deepseek-reasoner", name: "DeepSeek R1 - Full" }, // Pollinations.ai
+    { id: "deepseek-r1-llama", name: "DeepSeek R1 - Llama 70B" }, // Pollinations.ai
+    { id: "claude", name: "Claude 3.5 Haiku" }, // Pollinations.ai
+    { id: "gemini", name: "Gemini 2.0 Flash" }, // Pollinations.ai
+    { id: "gemini-thinking", name: "Gemini 2.0 Flash Thinking" }, // Pollinations.ai
+    { id: "phi", name: "Phi-4 Multimodal Instruct" }, // Pollinations.ai
+    { id: "qwen-coder", name: "Qwen 2.5 Coder 32B" }, // Pollinations.ai
     // OpenRouter models (通过ID格式区分，不显示来源)
     { id: "google/gemma-3n-e4b-it:free", name: "Gemma 3n 4B" },
     { id: "qwen/qwen3-235b-a22b:free", name: "Qwen 3 235B" },
@@ -146,7 +154,7 @@ const Chat = () => {
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
           
-          aiResponse = chunk; 
+          aiResponse += chunk; 
           
           setMessages(prev => {
             const newMessages = [...prev];
@@ -236,14 +244,66 @@ const Chat = () => {
     }
   };
 
-  // 模拟智能体API调用
-  const callAgentAPI = async (prompt: string, agentId: string): Promise<Message[]> => {
+  // 智能体API调用
+  const callAgentAPI = async (userPrompt: string, agentId: string): Promise<Message[]> => {
     setIsLoading(true);
     const generatedMessages: Message[] = [];
 
     try {
       if (agentId === 'xiaohongshu-strategist') {
-        const topic = prompt.replace('帮我分析', '').trim() || '小红书爆款笔记';
+        const topic = userPrompt.replace('帮我分析', '').trim() || '小红书爆款笔记';
+
+        // Define the system prompt for the Xiaohongshu strategist
+        const systemPrompt = `你现在是小红书爆款笔记的专业策略师。你的任务是根据用户提供的主题，生成三套完整的小红书笔记文案，每套文案都应包含：
+1.  **标题：** 吸引眼球，包含表情符号和关键词。
+2.  **正文：** 结构清晰，内容丰富，有故事性或实用性，分点阐述，并包含互动引导。
+3.  **话题标签：** 至少5个相关热门标签。
+4.  **互动引导：** 鼓励用户评论、点赞、收藏或分享。
+
+请严格按照以下三种类型各生成一套文案：
+-   **情感共鸣型：** 侧重分享个人经历、感受，引发读者情感共鸣。
+-   **实用干货型：** 提供具体方法、教程、清单，解决读者实际问题。
+-   **商业变现型：** 引导用户了解产品/服务，促进转化，可包含福利或资源包钩子。
+
+请确保每套文案内容完整、连贯，且符合小红书的平台风格。不要包含任何广告或推广信息，只专注于文案本身。
+
+用户主题：${topic}
+`;
+
+        // Call OpenRouter for text generation for the agent
+        const openRouterApiUrl = "https://openrouter.ai/api/v1/chat/completions";
+        const textResponse = await fetch(openRouterApiUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini", // Using gpt-4o-mini for agent text generation
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: `请为主题 "${topic}" 生成小红书笔记文案。` }
+            ],
+            stream: false, // Get full response at once for structured content
+          }),
+        });
+
+        if (!textResponse.ok) {
+          const errorData = await textResponse.json();
+          throw new Error(`OpenRouter API error for agent: ${textResponse.status} - ${errorData.message || JSON.stringify(errorData)}`);
+        }
+
+        const textData = await textResponse.json();
+        const generatedTextContent = textData.choices[0]?.message?.content || "未能生成文案。";
+
+        // Add the generated text content as the first message from the assistant
+        generatedMessages.push({
+          id: Date.now().toString() + '-text-content',
+          role: 'assistant',
+          content: generatedTextContent,
+          timestamp: new Date(),
+          type: 'text'
+        });
 
         // Image prompts for each section, following detailed structure
         const imagePrompts = {
@@ -272,69 +332,19 @@ const Chat = () => {
           constructPollinationsImageUrl(imagePrompts.monetization, { model: 'flux-cablyai', width: 1024, height: 768 }),
         ]);
 
-        // Construct messages with text and images
-        generatedMessages.push({
-          id: Date.now().toString() + '-text-intro',
-          role: 'assistant',
-          content: `✨ **小红书爆款笔记生成** ✨\n\n---`,
-          timestamp: new Date(),
-          type: 'text'
-        });
-
-        generatedMessages.push({
-          id: Date.now().toString() + '-text-strategy',
-          role: 'assistant',
-          content: `### 📝 **文案主题：** ${topic}\n\n#### **💡 爆款诊断与核心策略**\n想要在小红书脱颖而出，以下3大核心策略助你打造高互动笔记：\n1.  **情绪共鸣：** 深入挖掘用户情感痛点，分享真实经历，引发读者共鸣和代入感。\n2.  **实用价值：** 提供具体、可操作的解决方案、教程或清单，让读者学到东西并能立即应用。\n3.  **视觉冲击：** 高质量的图片或视频是小红书的灵魂，结合内容主题，创造吸引眼球的视觉效果。\n\n---`,
-          timestamp: new Date(),
-          type: 'text'
-        });
-
-        generatedMessages.push({
-          id: Date.now().toString() + '-text-template-header',
-          role: 'assistant',
-          content: `#### **✍️ 爆款文案模板（3套变体）**`,
-          timestamp: new Date(),
-          type: 'text'
-        });
-
-        // 1. 情感共鸣型
-        generatedMessages.push({
-          id: Date.now().toString() + '-text-emotional-copy',
-          role: 'assistant',
-          content: `**1. 情感共鸣型：**\n**标题：** 💔 别再emo了！这几句话，治愈了我的小红书焦虑症！\n**正文：**\n姐妹们，是不是也和我一样，每次发小红书笔记都石沉大海？是不是总觉得自己不够好，笔记没人看？我懂你！曾经我也深陷这种情绪，直到我学会了这几招，瞬间被治愈！\n- 生活再难，也要给自己一点甜，小红书就是我的精神角落。\n- 你不是一个人在战斗，我们都在努力变好！\n- 相信自己，你的每一次分享都值得被看见！\n- 愿你的小红书，成为你温暖的避风港。\n**话题标签：** #小红书运营 #内容创作 #情绪价值 #自我成长 #治愈系\n**互动引导：** 评论区告诉我，你最近的“小确幸”是什么？👇`,
-          timestamp: new Date(),
-          type: 'text'
-        });
-        if (imgUrl1) generatedMessages.push({ id: Date.now().toString() + '-img-1', role: 'assistant', content: '配图1', imageUrl: imgUrl1, timestamp: new Date(), type: 'image' });
-        if (imgUrl2) generatedMessages.push({ id: Date.now().toString() + '-img-2', role: 'assistant', content: '配图2', imageUrl: imgUrl2, timestamp: new Date(), type: 'image' });
-        if (imgUrl3) generatedMessages.push({ id: Date.now().toString() + '-img-3', role: 'assistant', content: '配图3', imageUrl: imgUrl3, timestamp: new Date(), type: 'image' });
-        if (imgUrl4) generatedMessages.push({ id: Date.now().toString() + '-img-4', role: 'assistant', content: '配图4', imageUrl: imgUrl4, timestamp: new Date(), type: 'image' });
-
-        // 2. 实用干货型
-        generatedMessages.push({
-          id: Date.now().toString() + '-text-practical-copy',
-          role: 'assistant',
-          content: `\n---\n\n**2. 实用干货型：**\n**标题：** 😱 震惊！我竟然靠这3招，让小红书笔记阅读量翻了10倍！\n**正文：**\n姐妹们，是不是也和我一样，每次发小红书笔记都石沉大海？别急！今天我把压箱底的爆款秘籍分享给你们，亲测有效！\n1.  **悬念钩子：** “你以为小红书只有颜值？错！这才是真正能让你涨粉的秘密武器！”\n2.  **数字清单：** “3个步骤，让你轻松打造高互动笔记，小白也能变大神！”\n3.  **身份认同：** “如果你也是内容创作者，这条笔记你一定要看完！”\n4.  **紧急感：** “再不学就晚了！小红书算法又变了，赶紧抓住这波红利！”\n**话题标签：** #小红书涨粉 #运营技巧 #干货分享 #自媒体 #流量变现\n**互动引导：** 收藏这篇笔记，下次发文不迷路！你还有哪些涨粉小技巧？评论区分享！👇`,
-          timestamp: new Date(),
-          type: 'text'
-        });
-        if (imgUrl5) generatedMessages.push({ id: Date.now().toString() + '-img-5', role: 'assistant', content: '配图1', imageUrl: imgUrl5, timestamp: new Date(), type: 'image' });
-        if (imgUrl6) generatedMessages.push({ id: Date.now().toString() + '-img-6', role: 'assistant', content: '配图2', imageUrl: imgUrl6, timestamp: new Date(), type: 'image' });
-        if (imgUrl7) generatedMessages.push({ id: Date.now().toString() + '-img-7', role: 'assistant', content: '配图3', imageUrl: imgUrl7, timestamp: new Date(), type: 'image' });
-        if (imgUrl8) generatedMessages.push({ id: Date.now().toString() + '-img-8', role: 'assistant', content: '配图4', imageUrl: imgUrl8, timestamp: new Date(), type: 'image' });
-
-        // 3. 商业变现型
-        generatedMessages.push({
-          id: Date.now().toString() + '-text-monetization-copy',
-          role: 'assistant',
-          content: `\n---\n\n**3. 商业变现型：**\n**标题：** 💰 0基础小白，30天小红书变现10000+，我做到了！\n**正文：**\n别再羡慕别人了！我一个普通人，只用了30天，就在小红书实现了月入过万！今天把我的秘诀毫无保留地分享给你！\n1.  **收益可视化：** “上个月我的小红书收益截图，真实数据，不P图！”\n2.  **素人可复制：** “我不是什么大V，普通人也能轻松上手，跟着我做就行！”\n3.  **步骤拆解：** “第一步：定位你的赛道；第二步：打造爆款内容；第三步：高效引流变现！”\n4.  **资源包钩子：** “评论区留言‘变现’，免费送你我的小红书变现秘籍资料包！”\n**话题标签：** #小红书变现 #副业赚钱 #0基础创业 #赚钱攻略 #个人IP\n**互动引导：** 想要这份变现资料包吗？点赞+关注，私信我“变现”即可领取！🚀`,
-          timestamp: new Date(),
-          type: 'text'
-        });
-        if (imgUrl9) generatedMessages.push({ id: Date.now().toString() + '-img-9', role: 'assistant', content: '配图1', imageUrl: imgUrl9, timestamp: new Date(), type: 'image' });
-        if (imgUrl10) generatedMessages.push({ id: Date.now().toString() + '-img-10', role: 'assistant', content: '配图2', imageUrl: imgUrl10, timestamp: new Date(), type: 'image' });
-        if (imgUrl11) generatedMessages.push({ id: Date.now().toString() + '-img-11', role: 'assistant', content: '配图3', imageUrl: imgUrl11, timestamp: new Date(), type: 'image' });
-        if (imgUrl12) generatedMessages.push({ id: Date.now().toString() + '-img-12', role: 'assistant', content: '配图4', imageUrl: imgUrl12, timestamp: new Date(), type: 'image' });
+        // Add image messages after the text content
+        generatedMessages.push({ id: Date.now().toString() + '-img-1', role: 'assistant', content: '情感共鸣型配图1', imageUrl: imgUrl1, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-2', role: 'assistant', content: '情感共鸣型配图2', imageUrl: imgUrl2, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-3', role: 'assistant', content: '情感共鸣型配图3', imageUrl: imgUrl3, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-4', role: 'assistant', content: '情感共鸣型配图4', imageUrl: imgUrl4, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-5', role: 'assistant', content: '实用干货型配图1', imageUrl: imgUrl5, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-6', role: 'assistant', content: '实用干货型配图2', imageUrl: imgUrl6, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-7', role: 'assistant', content: '实用干货型配图3', imageUrl: imgUrl7, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-8', role: 'assistant', content: '实用干货型配图4', imageUrl: imgUrl8, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-9', role: 'assistant', content: '商业变现型配图1', imageUrl: imgUrl9, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-10', role: 'assistant', content: '商业变现型配图2', imageUrl: imgUrl10, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-11', role: 'assistant', content: '商业变现型配图3', imageUrl: imgUrl11, timestamp: new Date(), type: 'image' });
+        generatedMessages.push({ id: Date.now().toString() + '-img-12', role: 'assistant', content: '商业变现型配图4', imageUrl: imgUrl12, timestamp: new Date(), type: 'image' });
 
       } else if (agentId === 'code-generator') {
         generatedMessages.push({
@@ -369,25 +379,19 @@ const Chat = () => {
           type: 'text'
         });
       } else {
-        // Fallback for other agents
-        const encodedPrompt = encodeURIComponent(prompt);
-        const apiUrl = `https://text.pollinations.ai/${encodedPrompt}?model=openai-audio&nologo=true`; 
-        const response = await fetch(apiUrl);
-        if (!response.ok) {
-          throw new Error(`API响应错误: ${response.status}`);
-        }
-        const textResponse = await response.text();
+        // Fallback for other agents - use a general text model
+        const responseContent = await callTextAPI(userPrompt, "gpt-4o-mini"); // Use a default text model for other agents
         generatedMessages.push({
           id: Date.now().toString(),
           role: 'assistant',
-          content: textResponse,
+          content: responseContent,
           timestamp: new Date(),
           type: 'text'
         });
       }
       
       // Simulate loading delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced delay for faster feedback
       
       return generatedMessages;
     } catch (error) {

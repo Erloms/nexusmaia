@@ -291,7 +291,7 @@ const Image = () => {
         'pencil-drawing': '铅笔在纸上绘制的过程，素描艺术，线条流畅',
         'oil-painting': '油画笔刷在画布上创作，厚重笔触，艺术质感',
         'digital-glitch': '数字故障美学效果，像素闪烁，科技感',
-        'neon-glow': '霓虹灯光效果逐渐点亮',
+        'neon-glow': '霓虹发光',
         'particle-explosion': '画面分解成粒子再重组'
       };
 
