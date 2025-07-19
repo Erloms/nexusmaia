@@ -37,12 +37,6 @@ const Image = () => {
     { id: 'flux-3d', name: '三维效果', description: 'Flux 3D - 立体三维' },
     { id: 'flux-cablyai', name: '创意艺术', description: 'Flux CablyAI - 创意艺术' },
     { id: 'turbo', name: '极速生成', description: 'Turbo - 快速生成' },
-    // 新增更多模型
-    { id: 'stable-diffusion-xl', name: 'Stable Diffusion XL', description: '高质量通用模型' },
-    { id: 'dall-e-3', name: 'DALL-E 3', description: 'OpenAI最新图像模型' },
-    { id: 'midjourney-v6', name: 'Midjourney V6', description: '艺术风格强大' },
-    { id: 'playground-v2.5', name: 'Playground V2.5', description: '快速迭代创意' },
-    { id: 'kandinsky-3', name: 'Kandinsky 3', description: '多语言图像生成' },
   ];
 
   // 视频魔法效果选项
@@ -247,8 +241,8 @@ const Image = () => {
         'pencil-drawing': '铅笔在纸上绘制的过程，素描艺术，线条流畅',
         'oil-painting': '油画笔刷在画布上创作，厚重笔触，艺术质感',
         'digital-glitch': '数字故障美学效果，像素闪烁，科技感',
-        'neon-glow': '霓虹灯光效果逐渐点亮，发光效果，夜晚氛围',
-        'particle-explosion': '画面分解成粒子再重组，特效转场，震撼视觉'
+        'neon-glow': '霓虹灯光效果逐渐点亮',
+        'particle-explosion': '画面分解成粒子再重组'
       };
 
       const selectedEffect = videoEffects.find(effect => effect.id === selectedVideoEffect);
