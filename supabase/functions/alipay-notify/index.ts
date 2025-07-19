@@ -1,48 +1,11 @@
-// @ts-ignore
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-// @ts-ignore
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
-// @ts-ignore
-import { crypto } from "https://deno.land/std@0.224.0/crypto/mod.ts";
-// @ts-ignore
-import { decode as base64decode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+/// <reference lib="deno.ns" />
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { AlipayRSAUtils } from '../_shared/crypto-utils.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-// Helper function to sort and concatenate parameters for verification
-function getVerifyContent(params: URLSearchParams): string {
-  const sortedKeys = Array.from(params.keys()).sort();
-  let content = '';
-  for (const key of sortedKeys) {
-    const value = params.get(key);
-    if (value !== null && key !== 'sign' && key !== 'sign_type') {
-      content += `${key}=${value}&`;
-    }
-  }
-  return content.slice(0, -1); // Remove trailing '&'
-}
-
-// TODO: REAL RSA VERIFICATION HERE
-// This is a conceptual placeholder. You need to implement actual RSA2 (SHA256WithRSA) verification.
-// This typically involves:
-// 1. Converting alipay_public_key (PEM format) to a CryptoKey.
-// 2. Hashing the content with SHA256.
-// 3. Verifying the signature against the hash using the public key and 'RSASSA-PKCS1-v1_5' algorithm.
-// You might need a Deno-compatible RSA library for this (e.g., from deno.land/x).
-async function verifyWithRSA2(content: string, signature: string, publicKeyPem: string): Promise<boolean> {
-  // This is a mock implementation. DO NOT USE IN PRODUCTION.
-  console.warn("WARNING: Using mock RSA verification. Replace with real implementation in production!");
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
-  const expectedHash = await crypto.subtle.digest("SHA-256", data);
-  const decodedSignature = base64decode(signature);
-
-  // In a real scenario, you'd compare expectedHash with the result of verifying decodedSignature
-  // using the publicKeyPem. For this mock, we just check if the decoded signature has some length.
-  return decodedSignature.byteLength > 0; 
 }
 
 serve(async (req) => {
@@ -50,124 +13,135 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseClient = createClient(
-    // @ts-ignore
-    Deno.env.get('SUPABASE_URL') ?? '',
-    // @ts-ignore
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', // Use service role key for database access
-    {
-      auth: {
-        persistSession: false,
-      },
-    },
-  );
-
   try {
-    // Alipay notifications are typically application/x-www-form-urlencoded
-    const requestBody = await req.text();
-    // Use URLSearchParams for robust parsing of form-urlencoded data
-    const params = new URLSearchParams(requestBody);
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-    const app_id = params.get('app_id');
-    const out_trade_no = params.get('out_trade_no'); // Our internal order ID (payment_id in our orders table)
-    const trade_status = params.get('trade_status');
-    const sign = params.get('sign');
-    const sign_type = params.get('sign_type');
-    // ... other parameters from Alipay notification can be accessed via params.get('key')
+    // 处理支付宝异步通知（表单数据）
+    const formData = await req.formData();
+    const notifyData: Record<string, string> = {};
+    
+    for (const [key, value] of formData.entries()) {
+      notifyData[key] = value.toString();
+    }
 
-    console.log('Alipay Notify Received:', Object.fromEntries(params.entries()));
+    console.log('支付宝异步通知数据:', notifyData);
 
-    // 1. Fetch Alipay configuration (especially public key for verification)
-    const { data: alipayConfig, error: configError } = await supabaseClient
+    const {
+      out_trade_no,
+      trade_status,
+      total_amount,
+      trade_no,
+      gmt_payment,
+      sign,
+      sign_type
+    } = notifyData;
+
+    if (!out_trade_no || !trade_status || !sign) {
+      throw new Error('缺少必要参数');
+    }
+
+    // 获取支付宝配置
+    const { data: config, error: configError } = await supabaseClient
       .from('payment_configs')
-      .select('alipay_public_key, alipay_app_id')
+      .select('*')
       .eq('id', 'alipay_config')
       .single();
 
-    if (configError || !alipayConfig) {
-      console.error('Failed to fetch Alipay config for notify:', configError);
-      return new Response('fail', { status: 500 }); // Return 'fail' to Alipay
+    if (configError || !config) {
+      console.error('获取支付配置失败:', configError);
+      throw new Error('支付配置未找到');
     }
 
-    // --- IMPORTANT: REAL ALIPAY SIGNATURE VERIFICATION GOES HERE ---
-    // TODO: REAL RSA VERIFICATION HERE
-    // Replace this with a robust RSA2 verification implementation using alipayConfig.alipay_public_key
-    // For production, you MUST use a secure cryptographic library.
-    const verifyContent = getVerifyContent(params);
-    const isSignatureValid = await verifyWithRSA2(verifyContent, sign || '', alipayConfig.alipay_public_key);
-    const isAppIdValid = (app_id === alipayConfig.alipay_app_id); // Verify app_id
+    // 验证签名
+    const signParams = { ...notifyData };
+    delete signParams.sign;
+    delete signParams.sign_type;
 
-    console.log("Verify content:", verifyContent);
-    console.log("Received signature:", sign);
-    console.log("Is signature valid (mock):", isSignatureValid);
-    console.log("Is App ID valid:", isAppIdValid);
+    const signString = AlipayRSAUtils.buildSignString(signParams);
+    console.log('验证签名字符串:', signString);
 
-    if (!isSignatureValid || !isAppIdValid) {
-      console.error('Alipay notification: Signature or App ID verification failed.');
-      return new Response('fail', { status: 400 }); // Return 'fail' to Alipay
+    let isSignatureValid = false;
+    try {
+      const publicKey = await AlipayRSAUtils.importPublicKey(config.alipay_public_key);
+      isSignatureValid = await AlipayRSAUtils.verifyRSA2(signString, sign, publicKey);
+      console.log('签名验证结果:', isSignatureValid);
+    } catch (error) {
+      console.error('签名验证失败:', error);
+      throw new Error('签名验证失败');
     }
-    // --- END OF REAL ALIPAY SIGNATURE VERIFICATION SECTION ---
 
-    if (trade_status === 'TRADE_SUCCESS') {
-      // Payment was successful
-      console.log(`Alipay payment successful for out_trade_no: ${out_trade_no}`);
+    if (!isSignatureValid) {
+      throw new Error('签名验证不通过');
+    }
 
-      // Find the corresponding order in our database using payment_id (which is out_trade_no)
-      const { data: order, error: orderError } = await supabaseClient
-        .from('orders')
-        .select('*')
-        .eq('payment_id', out_trade_no)
-        .single();
+    // 查找订单
+    const { data: orderData, error: orderError } = await supabaseClient
+      .from('orders')
+      .select('*, membership_plans(*)')
+      .eq('order_number', out_trade_no)
+      .single();
 
-      if (orderError || !order) {
-        console.error(`Order not found or error fetching order for payment_id: ${out_trade_no}`, orderError);
-        return new Response('fail', { status: 500 }); // Order not found in our system
-      }
+    if (orderError || !orderData) {
+      console.error('订单未找到:', orderError);
+      throw new Error('订单不存在');
+    }
 
-      // Check if the order is already processed to prevent duplicate processing
-      if (order.status === 'completed') {
-        console.log(`Order ${order.id} already completed. Skipping.`);
-        return new Response('success', { status: 200 }); // Already processed, return 'success' to Alipay
-      }
+    console.log('找到订单:', orderData);
 
-      // Update order status to 'completed'
+    // 处理支付状态
+    if (trade_status === 'TRADE_SUCCESS' || trade_status === 'TRADE_FINISHED') {
+      // 支付成功，更新订单状态
       const { error: updateError } = await supabaseClient
         .from('orders')
-        .update({ status: 'completed', updated_at: new Date().toISOString() })
-        .eq('id', order.id);
+        .update({
+          status: 'paid',
+          payment_id: trade_no,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderData.id);
 
       if (updateError) {
-        console.error(`Failed to update order status for ${order.id}:`, updateError);
-        return new Response('fail', { status: 500 }); // Database update failed
+        console.error('更新订单状态失败:', updateError);
+        throw updateError;
       }
 
-      // Activate user membership using the RPC function
-      const { error: activateError } = await supabaseClient.rpc('activate_membership', {
-        p_user_id: order.user_id!, // user_id is UUID, should not be null here
-        p_plan_id: order.plan_id!, // plan_id is UUID, should not be null here
-        p_order_id: order.id // Pass the order ID
-      });
+      // 激活会员权限
+      if (orderData.product_id) {
+        try {
+          const { error: activateError } = await supabaseClient
+            .rpc('activate_membership', {
+              p_user_id: orderData.user_id,
+              p_plan_id: orderData.product_id,
+              p_order_id: orderData.id
+            });
 
-      if (activateError) {
-        console.error(`Failed to activate membership for user ${order.user_id} with plan ${order.plan_id}:`, activateError);
-        // Depending on your business logic, you might want to revert order status or log for manual review
-        return new Response('fail', { status: 500 }); // Membership activation failed
+          if (activateError) {
+            console.error('激活会员失败:', activateError);
+          } else {
+            console.log('会员权限激活成功');
+          }
+        } catch (error) {
+          console.error('调用激活函数失败:', error);
+        }
       }
 
-      console.log(`Membership activated for user ${order.user_id} via order ${order.id}`);
-      return new Response('success', { status: 200 }); // Crucial: Return 'success' to Alipay
-    } else if (trade_status === 'TRADE_CLOSED' || trade_status === 'TRADE_FINISHED') {
-      // Handle other statuses if necessary, e.g., update order to 'closed' or 'failed'
-      console.log(`Alipay trade status: ${trade_status} for out_trade_no: ${out_trade_no}`);
-      // You might want to update the order status in your DB to 'closed' or 'finished'
-      return new Response('success', { status: 200 });
+      console.log('支付处理完成');
     } else {
-      console.warn(`Unhandled Alipay trade status: ${trade_status} for out_trade_no: ${out_trade_no}`);
-      return new Response('success', { status: 200 }); // Acknowledge receipt even for unhandled statuses
+      console.log('支付状态:', trade_status);
     }
 
+    // 返回success给支付宝
+    return new Response('success', {
+      headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
+    });
+
   } catch (error) {
-    console.error('Alipay Notify Edge Function Error:', error);
-    return new Response('fail', { status: 500 }); // Return 'fail' on any unexpected error
+    console.error('处理支付宝通知失败:', error);
+    return new Response('fail', {
+      headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
+    });
   }
-});
+})
