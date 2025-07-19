@@ -18,7 +18,7 @@ const PaymentConfig = () => {
     app_public_key: '',
     alipay_gateway_url: 'https://openapi.alipay.com/gateway.do',
     notify_url: '',
-    return_url: '',
+    return_url: 'https://nexus.m7ai.top/payment-success', // Updated default return_url
     is_sandbox: false,
   });
   const [showPrivateKey, setShowPrivateKey] = useState(false);
@@ -286,7 +286,7 @@ const PaymentConfig = () => {
                   id="return_url"
                   value={config.return_url}
                   onChange={(e) => setConfig({...config, return_url: e.target.value})}
-                  placeholder="https://your-app-domain.com/payment/success"
+                  placeholder="https://nexus.m7ai.top/payment-success"
                   className="bg-[#14202c] border-[#2e4258] text-white"
                 />
                 <p className="text-xs text-gray-400 mt-1">
