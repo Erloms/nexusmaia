@@ -126,7 +126,7 @@ interface CreateOrderRequest {
 }
 
 serve(async (req) => {
-  // console.log('Edge Function create-alipay-order started for request:', req.url); // Removed for now, as it's not showing up
+  console.log('Edge Function create-alipay-order started for request:', req.url);
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -149,6 +149,7 @@ serve(async (req) => {
         requestBody = JSON.parse(rawBody);
       } catch (parseError) {
         // If JSON parsing fails, return specific error
+        console.error('JSON parsing error:', parseError, 'Raw body:', rawBody);
         return new Response(
           JSON.stringify({ error: `Invalid JSON in request body: ${parseError.message}. Raw body: ${rawBody}` }),
           { 
@@ -159,6 +160,7 @@ serve(async (req) => {
       }
     } catch (readError) {
       // If reading raw body fails (e.g., stream already consumed), return specific error
+      console.error('Failed to read request body:', readError);
       return new Response(
         JSON.stringify({ error: `Failed to read request body: ${readError.message}` }),
         { 
@@ -169,9 +171,11 @@ serve(async (req) => {
     }
 
     const { subject, total_amount, product_id } = requestBody;
+    console.log('Received request for order creation:', { subject, total_amount, product_id });
 
     // 修正：正确验证请求体参数
     if (!subject || total_amount === undefined || total_amount === null || !product_id) { // Explicitly check for total_amount
+      console.error('Missing required parameters in request body:', { subject, total_amount, product_id });
       return new Response(
         JSON.stringify({ error: 'Subject, total_amount, and product_id are required' }),
         { 
@@ -184,6 +188,7 @@ serve(async (req) => {
     // 获取当前用户
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error('Missing Authorization header');
       throw new Error('缺少认证信息');
     }
 
@@ -191,8 +196,10 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
     
     if (userError || !user) {
+      console.error('User authentication failed:', userError);
       throw new Error('用户认证失败');
     }
+    console.log('Authenticated user:', user.id);
 
     // 获取支付宝配置
     const { data: config, error: configError } = await supabaseClient
@@ -202,11 +209,14 @@ serve(async (req) => {
       .single();
 
     if (configError || !config) {
+      console.error('Error fetching payment config:', configError);
       throw new Error('支付配置未找到');
     }
+    console.log('Fetched Alipay config:', config);
 
     // 生成订单号
     const orderNumber = `ORD${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    console.log('Generated order number:', orderNumber);
 
     // 创建订单记录
     const { data: orderData, error: orderError } = await supabaseClient
@@ -224,8 +234,10 @@ serve(async (req) => {
       .single();
 
     if (orderError) {
+      console.error('Supabase order insert error:', orderError);
       throw new Error('创建订单失败');
     }
+    console.log('Order created in Supabase:', orderData);
 
     // 构建支付宝请求参数
     const alipayParams = {
@@ -243,16 +255,20 @@ serve(async (req) => {
       }),
       notify_url: config.notify_url,
     };
+    console.log('Alipay request parameters:', alipayParams);
 
     // 生成签名字符串
     const signString = AlipayRSAUtils.buildSignString(alipayParams);
+    console.log('Sign string for Alipay:', signString);
 
     // 导入私钥并签名
     let signature: string;
     try {
       const privateKey = await AlipayRSAUtils.importPrivateKey(config.alipay_private_key);
       signature = await AlipayRSAUtils.signRSA2(signString, privateKey);
+      console.log('Generated signature:', signature);
     } catch (error) {
+      console.error('Signature generation failed:', error);
       throw new Error('签名生成失败');
     }
 
@@ -269,6 +285,7 @@ serve(async (req) => {
     Object.keys(finalParams).forEach(key => {
       formData.append(key, finalParams[key as keyof typeof finalParams]);
     });
+    console.log('Sending request to Alipay URL:', alipayUrl, 'with form data:', formData.toString());
 
     const alipayResponse = await fetch(alipayUrl, {
       method: 'POST',
@@ -280,21 +297,26 @@ serve(async (req) => {
 
     if (!alipayResponse.ok) {
       const errorText = await alipayResponse.text();
+      console.error('Alipay API request failed:', alipayResponse.status, errorText);
       throw new Error(`支付宝API请求失败: ${alipayResponse.status} - ${errorText}`);
     }
 
     const responseText = await alipayResponse.text();
+    console.log('Raw Alipay response:', responseText);
 
     // 解析支付宝响应
     let alipayResult;
     try {
       const responseJson = JSON.parse(responseText);
       alipayResult = responseJson.alipay_trade_precreate_response;
+      console.log('Parsed Alipay result:', alipayResult);
     } catch (error) {
+      console.error('Failed to parse Alipay response:', error, 'Raw response:', responseText);
       throw new Error(`解析支付宝响应失败: ${error.message}. 原始响应: ${responseText}`);
     }
 
     if (alipayResult.code !== '10000') {
+      console.error('Alipay returned an error code:', alipayResult.code, alipayResult.msg, alipayResult.sub_msg);
       throw new Error(`支付宝错误: ${alipayResult.msg || alipayResult.sub_msg}`);
     }
 
@@ -303,6 +325,7 @@ serve(async (req) => {
       .from('orders')
       .update({ payment_id: alipayResult.out_trade_no })
       .eq('id', orderData.id);
+    console.log('Order updated with payment_id:', alipayResult.out_trade_no);
 
     // 返回二维码链接
     return new Response(
@@ -318,6 +341,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
+    console.error('Caught error in create-alipay-order Edge Function:', error);
     return new Response(
       JSON.stringify({ 
         success: false, 
