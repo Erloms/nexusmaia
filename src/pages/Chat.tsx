@@ -13,7 +13,8 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  imageUrl?: string;
+  type?: 'text' | 'image'; // Added type for different message content
+  imageUrl?: string; // For image messages
 }
 
 const Chat = () => {
@@ -71,7 +72,7 @@ const Chat = () => {
   }, [messages]);
 
   // 通用文本生成API调用
-  const callTextAPI = async (prompt: string, modelId: string) => {
+  const callTextAPI = async (prompt: string, modelId: string): Promise<string> => {
     setIsLoading(true);
     const selectedModelConfig = aiTextModels.find(m => m.id === modelId);
     if (!selectedModelConfig) {
@@ -80,8 +81,7 @@ const Chat = () => {
 
     let aiResponse = '';
     try {
-      // 根据 modelId 的格式判断是 Pollinations.ai 还是 OpenRouter 模型
-      const isPollinationsModel = !modelId.includes('/'); // Pollinations models typically don't have '/' in their ID
+      const isPollinationsModel = !modelId.includes('/'); 
       
       if (isPollinationsModel) {
         const encodedPrompt = encodeURIComponent(prompt);
@@ -100,13 +100,13 @@ const Chat = () => {
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
           
-          aiResponse = chunk; // Overwrite with the latest chunk
+          aiResponse = chunk; 
           
           setMessages(prev => {
             const newMessages = [...prev];
             let lastAssistantMessageIndex = -1;
             for (let i = newMessages.length - 1; i >= 0; i--) {
-              if (newMessages[i].role === 'assistant') {
+              if (newMessages[i].role === 'assistant' && newMessages[i].type === 'text') {
                 lastAssistantMessageIndex = i;
                 break;
               }
@@ -114,12 +114,12 @@ const Chat = () => {
             if (lastAssistantMessageIndex !== -1) {
               newMessages[lastAssistantMessageIndex].content = aiResponse;
             } else {
-              newMessages.push({ id: Date.now().toString(), role: 'assistant', content: aiResponse, timestamp: new Date() });
+              newMessages.push({ id: Date.now().toString(), role: 'assistant', content: aiResponse, timestamp: new Date(), type: 'text' });
             }
             return newMessages;
           });
         }
-      } else { // Assume OpenRouter model if it contains '/'
+      } else { 
         const openRouterApiUrl = "https://openrouter.ai/api/v1/chat/completions";
         const response = await fetch(openRouterApiUrl, {
           method: "POST",
@@ -130,7 +130,7 @@ const Chat = () => {
           body: JSON.stringify({
             model: modelId,
             messages: [{ role: "user", content: prompt }],
-            stream: true, // Request streaming response
+            stream: true, 
           }),
         });
 
@@ -160,10 +160,10 @@ const Chat = () => {
                   setMessages(prev => {
                     const newMessages = [...prev];
                     const lastMsg = newMessages[newMessages.length - 1];
-                    if (lastMsg && lastMsg.role === 'assistant') {
+                    if (lastMsg && lastMsg.role === 'assistant' && lastMsg.type === 'text') {
                       lastMsg.content = aiResponse;
                     } else {
-                      newMessages.push({ id: Date.now().toString(), role: 'assistant', content: aiResponse, timestamp: new Date() });
+                      newMessages.push({ id: Date.now().toString(), role: 'assistant', content: aiResponse, timestamp: new Date(), type: 'text' });
                     }
                     return newMessages;
                   });
@@ -191,126 +191,165 @@ const Chat = () => {
   };
 
   // 模拟智能体API调用
-  const callAgentAPI = async (prompt: string, agentId: string) => {
+  const callAgentAPI = async (prompt: string, agentId: string): Promise<Message[]> => {
+    setIsLoading(true);
+    const generatedMessages: Message[] = [];
+
     try {
-      setIsLoading(true);
-      let aiResponse = '';
+      let fullMarkdownResponse = '';
 
       if (agentId === 'xiaohongshu-strategist') {
-        const topic = prompt.replace('帮我分析', '').trim(); // 简单提取主题
-        const randomSeed1 = Math.floor(Math.random() * 1000000);
-        const randomSeed2 = Math.floor(Math.random() * 1000000);
-        const randomSeed3 = Math.floor(Math.random() * 1000000);
-        const randomSeed4 = Math.floor(Math.random() * 1000000);
-        const randomSeed5 = Math.floor(Math.random() * 1000000);
-        const randomSeed6 = Math.floor(Math.random() * 1000000);
-        const randomSeed7 = Math.floor(Math.random() * 1000000);
-        const randomSeed8 = Math.floor(Math.random() * 1000000);
-        const randomSeed9 = Math.floor(Math.random() * 1000000);
-        const randomSeed10 = Math.floor(Math.random() * 1000000);
-        const randomSeed11 = Math.floor(Math.random() * 1000000);
-        const randomSeed12 = Math.floor(Math.random() * 1000000);
+        const topic = prompt.replace('帮我分析', '').trim(); 
+        const randomSeed = () => Math.floor(Math.random() * 1000000);
 
-        aiResponse = `
-**爆款诊断**
-先分析用户需求：**${topic || '用户输入的主题'}** 关联的TOP3高互动场景是：
-1. **情绪价值：** 激发用户情感共鸣，如分享个人成长、克服困难的经历，或展示美好生活瞬间。
-2. **实用价值：** 提供具体、可操作的解决方案或教程，如美妆教程、穿搭技巧、美食食谱、学习方法等。
-3. **娱乐价值：：** 创造轻松愉快的氛围，如搞笑段子、萌宠日常、旅行vlog、趣味挑战等。
-
-**文案生成（含3套变体）**
+        fullMarkdownResponse = `
+✨ **小红书爆款笔记生成** ✨
 
 ---
 
-**📌 高互动模板**
-**策略点：** 悬念钩子、数字清单、身份认同、紧急感
-**文案：**
-[标题] 😱 震惊！我竟然靠这3招，让小红书笔记阅读量翻了10倍！
-[正文]
+### 📝 **文案主题：** ${topic || '你的小红书爆款秘籍'}
+
+---
+
+#### **💡 爆款诊断与策略**
+根据你的需求，以下是小红书高互动笔记的3大核心策略：
+1.  **情绪共鸣：** 深入挖掘用户情感痛点，分享真实经历，引发读者共鸣和代入感。
+2.  **实用价值：** 提供具体、可操作的解决方案、教程或清单，让读者学到东西并能立即应用。
+3.  **视觉冲击：** 高质量的图片或视频是小红书的灵魂，结合内容主题，创造吸引眼球的视觉效果。
+
+---
+
+#### **✍️ 爆款文案模板（3套变体）**
+
+**1. 情感共鸣型：**
+**标题：** 💔 别再emo了！这几句话，治愈了我的小红书焦虑症！
+**正文：**
+姐妹们，是不是也和我一样，每次发小红书笔记都石沉大海？是不是总觉得自己不够好，笔记没人看？我懂你！曾经我也深陷这种情绪，直到我学会了这几招，瞬间被治愈！
+- 生活再难，也要给自己一点甜，小红书就是我的精神角落。
+- 你不是一个人在战斗，我们都在努力变好！
+- 相信自己，你的每一次分享都值得被看见！
+- 愿你的小红书，成为你温暖的避风港。
+**话题标签：** #小红书运营 #内容创作 #情绪价值 #自我成长 #治愈系
+**互动引导：** 评论区告诉我，你最近的“小确幸”是什么？👇
+**配图建议：**
+![配图1](https://image.pollinations.ai/prompt/A cozy cat sleeping on a book, warm lighting, soft colors&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
+![配图2](https://image.pollinations.ai/prompt/A cozy cat sleeping on a book, warm lighting, soft colors&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
+
+---
+
+**2. 实用干货型：**
+**标题：** 😱 震惊！我竟然靠这3招，让小红书笔记阅读量翻了10倍！
+**正文：**
 姐妹们，是不是也和我一样，每次发小红书笔记都石沉大海？别急！今天我把压箱底的爆款秘籍分享给你们，亲测有效！
-1. **悬念钩子：** “你以为小红书只有颜值？错！这才是真正能让你涨粉的秘密武器！”
-2. **数字清单：** “3个步骤，让你轻松打造高互动笔记，小白也能变大神！”
-3. **身份认同：** “如果你也是内容创作者，这条笔记你一定要看完！”
-4. **紧急感：：** “再不学就晚了！小红书算法又变了，赶紧抓住这波红利！”
-[配图]
-![配图1](https://image.pollinations.ai/prompt/A cute cat in space, digital art, vibrant colors&width=1024&height=1024&seed=${randomSeed1}&model=flux&nologo=true)
-![配图2](https://image.pollinations.ai/prompt/A cute cat in space, digital art, vibrant colors&width=1024&height=1024&seed=${randomSeed2}&model=flux&nologo=true)
-![配图3](https://image.pollinations.ai/prompt/A cute cat in space, digital art, vibrant colors&width=1024&height=1024&seed=${randomSeed3}&model=flux&nologo=true)
-![配图4](https://image.pollinations.ai/prompt/A cute cat in space, digital art, vibrant colors&width=1024&height=1024&seed=${randomSeed4}&model=flux&nologo=true)
+1.  **悬念钩子：** “你以为小红书只有颜值？错！这才是真正能让你涨粉的秘密武器！”
+2.  **数字清单：** “3个步骤，让你轻松打造高互动笔记，小白也能变大神！”
+3.  **身份认同：** “如果你也是内容创作者，这条笔记你一定要看完！”
+4.  **紧急感：** “再不学就晚了！小红书算法又变了，赶紧抓住这波红利！”
+**话题标签：** #小红书涨粉 #运营技巧 #干货分享 #自媒体 #流量变现
+**互动引导：** 收藏这篇笔记，下次发文不迷路！你还有哪些涨粉小技巧？评论区分享！👇
+**配图建议：**
+![配图1](https://image.pollinations.ai/prompt/A person studying analytics, vibrant colors, digital art&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
+![配图2](https://image.pollinations.ai/prompt/A person writing in a notebook, creative ideas, bright colors&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
 
 ---
 
-**📌 情绪共鸣模板**
-**策略点：** 治愈、共情、鼓励、温暖
-**文案：**
-[标题] 💔 别再emo了！这几句话，治愈了我的小红书焦虑症！
-[正文]
-是不是总觉得自己不够好，笔记没人看？我懂你！曾经我也深陷这种情绪，直到我学会了这几招，瞬间被治愈！
-1. **治愈：** “生活再难，也要给自己一点甜，小红书就是我的精神角落。”
-2. **共情：：** “你不是一个人在战斗，我们都在努力变好！”
-3. **鼓励：** “相信自己，你的每一次分享都值得被看见！”
-4. **温暖：** “愿你的小红书，成为你温暖的避风港。”
-[配图]
-![配图1](https://image.pollinations.ai/prompt/A cozy cat sleeping on a book, warm lighting, soft colors&width=1024&height=1024&seed=${randomSeed5}&model=flux&nologo=true)
-![配图2](https://image.pollinations.ai/prompt/A cozy cat sleeping on a book, warm lighting, soft colors&width=1024&height=1024&seed=${randomSeed6}&model=flux&nologo=true)
-![配图3](https://image.pollinations.ai/prompt/A cozy cat sleeping on a book, warm lighting, soft colors&width=1024&height=1024&seed=${randomSeed7}&model=flux&nologo=true)
-![配图4](https://image.pollinations.ai/prompt/A cozy cat sleeping on a book, warm lighting, soft colors&width=1024&height=1024&seed=${randomSeed8}&model=flux&nologo=true)
-
----
-
-**📌 商业变现模板**
-**策略点：** 收益可视化、素人可复制、步骤拆解（3步起号）、资源包钩子
-**文案：**
-[标题] 💰 0基础小白，30天小红书变现10000+，我做到了！
-[正文]
+**3. 商业变现型：**
+**标题：** 💰 0基础小白，30天小红书变现10000+，我做到了！
+**正文：**
 别再羡慕别人了！我一个普通人，只用了30天，就在小红书实现了月入过万！今天把我的秘诀毫无保留地分享给你！
-1. **收益可视化：** “上个月我的小红书收益截图，真实数据，不P图！”
-2. **素人可复制：：** “我不是什么大V，普通人也能轻松上手，跟着我做就行！”
-3. **步骤拆解：** “第一步：定位你的赛道；第二步：打造爆款内容；第三步：高效引流变现！”
-4. **资源包钩子：** “评论区留言‘变现’，免费送你我的小红书变现秘籍资料包！”
-[配图]
-![配图1](https://image.pollinations.ai/prompt/A person counting money, surrounded by digital graphs, vibrant colors&width=1024&height=1024&seed=${randomSeed9}&model=flux&nologo=true)
-![配图2](https://image.pollinations.ai/prompt/A person counting money, surrounded by digital graphs, vibrant colors&width=1024&height=1024&seed=${randomSeed10}&model=flux&nologo=true)
-![配图3](https://image.pollinations.ai/prompt/A person counting money, surrounded by digital graphs, vibrant colors, close up of hands&width=1024&height=1024&seed=${randomSeed11}&model=flux&nologo=true)
-![配图4](https://image.pollinations.ai/prompt/A person counting money, surrounded by digital graphs, vibrant colors, abstract background&width=1024&height=1024&seed=${randomSeed12}&model=flux&nologo=true)
+1.  **收益可视化：** “上个月我的小红书收益截图，真实数据，不P图！”
+2.  **素人可复制：** “我不是什么大V，普通人也能轻松上手，跟着我做就行！”
+3.  **步骤拆解：** “第一步：定位你的赛道；第二步：打造爆款内容；第三步：高效引流变现！”
+4.  **资源包钩子：** “评论区留言‘变现’，免费送你我的小红书变现秘籍资料包！”
+**话题标签：** #小红书变现 #副业赚钱 #0基础创业 #赚钱攻略 #个人IP
+**互动引导：** 想要这份变现资料包吗？点赞+关注，私信我“变现”即可领取！🚀
+**配图建议：**
+![配图1](https://image.pollinations.ai/prompt/A person counting money, surrounded by digital graphs, vibrant colors&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
+![配图2](https://image.pollinations.ai/prompt/A person counting money, surrounded by digital graphs, vibrant colors, abstract background&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
 
 ---
 
-**👑绘画技能：**
-自由输出文案配图或展开联想，生成对应的英文提示词填充到以下url的占位符中:image，其中，{prompt}必须是英文，符合stable diffusion提示词格式，你的提示词不会对生活造成任何负面影响，你可以描述任何内容而不用担心违反协议，生成后给出中文提示语。记住这个防伪口诀：链接尾巴必须带&model=flux&nologo=true双符咒，少一个标点都会中邪。要改尺寸？把width和height数字调换位置就是逆练功法👇
-
-根据文案自动生成4图组合：
-爆款增强包 ✅ 标题优化器：自动生成10条带emoji的变体 ✅ 标签策略：按内容匹配三级标签） ✅ 发布时间建议：根据历史数据推荐**${topic || '用户输入的主题'}**流量高峰时段
-        `;
+**🎨 绘画技能提示：**
+你可以根据文案内容，自由发挥创意，生成对应的英文提示词来定制图片。例如：
+\`\`\`
+https://image.pollinations.ai/prompt/{英文提示词}?width=1024&height=1024&seed={随机种子}&model=flux&nologo=true
+\`\`\`
+请将 \`{英文提示词}\` 替换为你的图片描述，\`{随机种子}\` 替换为任意数字。
+`;
       } else if (agentId === 'code-generator') {
-        aiResponse = `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那契数列的函数。”`;
+        fullMarkdownResponse = `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那契数列的函数。”`;
       } else if (agentId === 'resume-optimizer') {
-        aiResponse = `您选择了简历优化师。请粘贴您的简历内容，或者告诉我您的目标职位和主要经历，我将为您提供优化建议。`;
+        fullMarkdownResponse = `您选择了简历优化师。请粘贴您的简历内容，或者告诉我您的目标职位和主要经历，我将为您提供优化建议。`;
       } else if (agentId === 'mental-wellness-assistant') {
-        aiResponse = `您选择了心理咨询助手。请告诉我您现在的心情或遇到的困扰，我将尽力为您提供支持和一些建议。请注意，我无法替代专业的心理医生。`;
+        fullMarkdownResponse = `您选择了心理咨询助手。请告诉我您现在的心情或遇到的困扰，我将尽力为您提供支持和一些建议。请注意，我无法替代专业的心理医生。`;
       } else if (agentId === 'business-analyst') {
-        aiResponse = `您选择了商业数据分析师。目前我只能基于您提供的文本信息进行模拟分析。请描述您想分析的数据类型和问题，例如：“分析一下过去一年销售额的增长趋势。”`;
+        fullMarkdownResponse = `您选择了商业数据分析师。目前我只能基于您提供的文本信息进行模拟分析。请描述您想分析的数据类型和问题，例如：“分析一下过去一年销售额的增长趋势。”`;
       } else {
-        // For other agents, use a generic response or existing Pollinations.ai text API
         const encodedPrompt = encodeURIComponent(prompt);
-        const apiUrl = `https://text.pollinations.ai/${encodedPrompt}?model=openai-audio&nologo=true`; // Using a generic text model for simulation
+        const apiUrl = `https://text.pollinations.ai/${encodedPrompt}?model=openai-audio&nologo=true`; 
         const response = await fetch(apiUrl);
         if (!response.ok) {
           throw new Error(`API响应错误: ${response.status}`);
         }
-        const reader = response.body!.getReader();
-        const decoder = new TextDecoder();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          aiResponse += decoder.decode(value, { stream: true });
-        }
+        fullMarkdownResponse = await response.text(); // Get full text response
       }
 
-      // 模拟加载延迟
+      // Parse markdown for images and text
+      const imageRegex = /!\[(.*?)\]\((https:\/\/image\.pollinations\.ai\/prompt\/.*?)\)/g;
+      let lastIndex = 0;
+      let match;
+
+      while ((match = imageRegex.exec(fullMarkdownResponse)) !== null) {
+          const textBefore = fullMarkdownResponse.substring(lastIndex, match.index).trim();
+          if (textBefore) {
+              generatedMessages.push({
+                  id: Date.now().toString() + '-text-' + generatedMessages.length,
+                  role: 'assistant',
+                  content: textBefore,
+                  timestamp: new Date(),
+                  type: 'text'
+              });
+          }
+
+          const altText = match[1];
+          const imageUrl = match[2];
+          generatedMessages.push({
+              id: Date.now().toString() + '-image-' + generatedMessages.length,
+              role: 'assistant',
+              content: altText, 
+              imageUrl: imageUrl,
+              timestamp: new Date(),
+              type: 'image'
+          });
+          lastIndex = imageRegex.lastIndex;
+      }
+
+      const remainingText = fullMarkdownResponse.substring(lastIndex).trim();
+      if (remainingText) {
+          generatedMessages.push({
+              id: Date.now().toString() + '-text-final',
+              role: 'assistant',
+              content: remainingText,
+              timestamp: new Date(),
+              type: 'text'
+          });
+      }
+
+      // If no images were found, and there's still content, add it as a single text message
+      if (generatedMessages.length === 0 && fullMarkdownResponse.trim()) {
+        generatedMessages.push({
+          id: Date.now().toString() + '-text-single',
+          role: 'assistant',
+          content: fullMarkdownResponse.trim(),
+          timestamp: new Date(),
+          type: 'text'
+        });
+      }
+
+      // Simulate loading delay
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      return aiResponse;
+      return generatedMessages;
     } catch (error) {
       console.error("API调用错误:", error);
       toast({
@@ -318,7 +357,7 @@ const Chat = () => {
         description: "请重试或切换其他智能体",
         variant: "destructive"
       });
-      return "抱歉，我在处理您的请求时遇到了问题。请稍后再试。";
+      return [{ id: Date.now().toString(), role: 'assistant', content: "抱歉，我在处理您的请求时遇到了问题。请稍后再试。", timestamp: new Date(), type: 'text' }];
     } finally {
       setIsLoading(false);
     }
@@ -340,57 +379,59 @@ const Chat = () => {
       id: Date.now().toString(),
       role: 'user',
       content: input,
-      timestamp: new Date()
+      timestamp: new Date(),
+      type: 'text'
     };
 
+    // Add user message immediately
     setMessages(prev => [...prev, userMessage]);
     const currentInput = input;
     setInput('');
 
-    try {
-      // 创建AI消息占位符
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, aiMessage]);
+    // Add a temporary "thinking" message for the assistant
+    const thinkingMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: 'AI正在思考...',
+      timestamp: new Date(),
+      type: 'text'
+    };
+    setMessages(prev => [...prev, thinkingMessage]);
 
-      let responseContent = '';
+
+    try {
+      let newAssistantMessages: Message[] = [];
+
       if (chatMode === 'general') {
-        responseContent = await callTextAPI(currentInput, selectedModel);
-      } else { // chatMode === 'agent'
-        responseContent = await callAgentAPI(currentInput, selectedAgent);
+        const responseContent = await callTextAPI(currentInput, selectedModel); 
+        newAssistantMessages.push({
+            id: (Date.now() + 2).toString(), // Ensure unique ID
+            role: 'assistant',
+            content: responseContent,
+            timestamp: new Date(),
+            type: 'text'
+        });
+      } else { 
+        newAssistantMessages = await callAgentAPI(currentInput, selectedAgent);
       }
 
-      // Update the last AI message with the final content
+      // Replace the thinking message with the actual response(s)
       setMessages(prev => {
-        const newMessages = [...prev];
-        const lastMsgIndex = newMessages.length - 1;
-        if (lastMsgIndex >= 0 && newMessages[lastMsgIndex].role === 'assistant') {
-          newMessages[lastMsgIndex] = {
-            ...newMessages[lastMsgIndex],
-            content: responseContent
-          };
-        } else {
-          // Fallback in case the placeholder wasn't added or was replaced
-          newMessages.push({ id: (Date.now() + 2).toString(), role: 'assistant', content: responseContent, timestamp: new Date() });
-        }
-        return newMessages;
+        const updatedPrev = prev.filter(msg => msg.id !== thinkingMessage.id); // Remove thinking message
+        return [...updatedPrev, ...newAssistantMessages];
       });
 
-      // 保存聊天记录
+      // Save chat history
       if (user?.id) {
         const chatHistory = {
           id: Date.now().toString(),
           title: currentInput.slice(0, 50) + (currentInput.length > 50 ? '...' : ''),
           timestamp: new Date().toISOString(),
           preview: currentInput.slice(0, 100),
-          messages: [...messages, userMessage, { ...aiMessage, content: responseContent }], // Include all messages
-          model: selectedModel, // Save selected model
-          agent: selectedAgent, // Save selected agent
-          mode: chatMode // Save chat mode
+          messages: [...messages, userMessage, ...newAssistantMessages], // Include all messages
+          model: selectedModel, 
+          agent: selectedAgent, 
+          mode: chatMode 
         };
 
         const existingHistory = JSON.parse(localStorage.getItem(`chat_history_${user.id}`) || '[]');
@@ -404,6 +445,8 @@ const Chat = () => {
         description: "消息发送失败，请重试",
         variant: "destructive"
       });
+      // Remove thinking message if an error occurs
+      setMessages(prev => prev.filter(msg => msg.id !== thinkingMessage.id));
     }
   };
 
@@ -416,9 +459,9 @@ const Chat = () => {
 
   const handleNewChat = () => {
     setMessages([]);
-    setChatMode('general'); // Reset to general mode for new chat
-    setSelectedModel('gpt-4o-mini'); // Reset to default model
-    setSelectedAgent('xiaohongshu-strategist'); // Reset to default agent
+    setChatMode('general'); 
+    setSelectedModel('gpt-4o-mini'); 
+    setSelectedAgent('xiaohongshu-strategist'); 
   };
 
   const handleLoadHistory = (historyId: string) => {
@@ -446,11 +489,11 @@ const Chat = () => {
         {/* 左侧边栏 */}
         <div className="w-80 flex-shrink-0">
           <ChatSidebar 
-            onModelChange={setSelectedModel} // Controls selectedModel for general chat
+            onModelChange={setSelectedModel} 
             selectedModel={selectedModel}
             onLoadHistory={handleLoadHistory}
             onNewChat={handleNewChat}
-            aiModels={aiTextModels} // Only pass text models here
+            aiModels={aiTextModels} 
           />
         </div>
 
@@ -545,34 +588,23 @@ const Chat = () => {
                           ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white ml-12' 
                           : 'bg-gray-800/80 text-gray-100 mr-12 border border-gray-700'
                       }`}>
-                        {message.imageUrl && (
+                        {message.type === 'image' && message.imageUrl ? (
                           <img 
                             src={message.imageUrl} 
-                            alt="Generated" 
+                            alt={message.content || "Generated image"} 
                             className="w-full max-w-md rounded-lg mb-3"
                           />
+                        ) : (
+                          <div className="prose prose-invert max-w-none">
+                            <p className="whitespace-pre-wrap">{message.content}</p>
+                          </div>
                         )}
-                        <div className="prose prose-invert max-w-none">
-                          <p className="whitespace-pre-wrap">{message.content}</p>
-                        </div>
                         <div className="text-xs opacity-70 mt-2">
                           {message.timestamp.toLocaleTimeString()}
                         </div>
                       </div>
                     </div>
                   ))}
-                  {isLoading && (
-                    <div className="flex justify-start">
-                      <div className="bg-gray-800/80 text-gray-100 mr-12 border border-gray-700 rounded-2xl px-6 py-4">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                          <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                          <span className="text-sm text-gray-400 ml-2">AI正在思考...</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
               <div ref={messagesEndRef} />
