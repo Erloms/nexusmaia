@@ -25,6 +25,32 @@ const PaymentConfig = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
+  // Helper to ensure PEM format
+  const ensurePemFormat = (key: string, type: 'private' | 'public' | 'app_public') => {
+    if (!key) return '';
+    const cleanedKey = key.replace(/-----(BEGIN|END) (RSA )?(PRIVATE|PUBLIC) KEY-----/g, '').replace(/\s/g, '');
+    let header = '';
+    let footer = '';
+
+    if (type === 'private') {
+      header = '-----BEGIN PRIVATE KEY-----';
+      footer = '-----END PRIVATE KEY-----';
+    } else if (type === 'public') {
+      header = '-----BEGIN PUBLIC KEY-----';
+      footer = '-----END PUBLIC KEY-----';
+    } else if (type === 'app_public') {
+      header = '-----BEGIN PUBLIC KEY-----'; // App Public Key also uses PUBLIC KEY header
+      footer = '-----END PUBLIC KEY-----';
+    }
+
+    if (cleanedKey.startsWith(header) && cleanedKey.endsWith(footer)) {
+      return key; // Already in correct format
+    }
+    // Add line breaks for readability within the PEM block
+    const formattedKey = cleanedKey.match(/.{1,64}/g)?.join('\n') || cleanedKey;
+    return `${header}\n${formattedKey}\n${footer}`;
+  };
+
   useEffect(() => {
     const fetchConfig = async () => {
       setLoading(true);
@@ -63,12 +89,30 @@ const PaymentConfig = () => {
   }, []);
 
   const handleSave = async () => {
+    // Apply PEM formatting before saving
+    const formattedConfig = {
+      ...config,
+      alipay_private_key: ensurePemFormat(config.alipay_private_key, 'private'),
+      alipay_public_key: ensurePemFormat(config.alipay_public_key, 'public'),
+      app_public_key: ensurePemFormat(config.app_public_key, 'app_public'),
+    };
+
+    // Basic validation for required URLs
+    if (!formattedConfig.notify_url || !formattedConfig.return_url) {
+      toast({
+        title: "配置不完整",
+        description: "异步通知地址和同步返回地址不能为空。",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       // Call the Supabase Edge Function directly
       const { data, error } = await supabase.functions.invoke('payment-config', {
         method: 'POST',
-        body: config // Send the entire config object
+        body: formattedConfig // Send the entire formatted config object
       });
 
       if (error) throw error;
@@ -77,6 +121,8 @@ const PaymentConfig = () => {
         title: "配置保存成功",
         description: "支付宝配置已更新",
       });
+      // Update local state with the formatted keys after successful save
+      setConfig(formattedConfig);
     } catch (error: any) {
       console.error('Error saving payment config:', error);
       toast({
