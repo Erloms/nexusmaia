@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
 // @ts-ignore
-import { parse } from "https://deno.land/std@0.224.0/node/querystring.ts"; // For parsing x-www-form-urlencoded
+import { parse } from "https://deno.land/std@0.190.0/node/querystring.ts"; // Changed to 0.190.0
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
