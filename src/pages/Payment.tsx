@@ -60,7 +60,9 @@ const Payment = () => {
   }, []);
 
   const handlePurchase = async (planType: 'annual' | 'lifetime' | 'agent') => {
+    console.log('handlePurchase triggered for planType:', planType); // Log 1
     if (!isAuthenticated || !user) {
+      console.log('User not authenticated, navigating to login.'); // Log 2
       toast({
         title: "请先登录",
         description: "购买会员需要登录账户",
@@ -72,6 +74,7 @@ const Payment = () => {
 
     const selectedPlan = plans[planType];
     if (!selectedPlan) {
+      console.error('Selected plan not found:', planType); // Log 3
       toast({
         title: "错误",
         description: "未找到选定的会员计划",
@@ -90,7 +93,7 @@ const Payment = () => {
         total_amount: Number(selectedPlan.price), // Ensure total_amount is a number
         product_id: selectedPlan.id,
       };
-      console.log('Sending request body to create-alipay-order:', requestBody); // Added log
+      console.log('Sending request body to create-alipay-order:', requestBody); // Log 4
 
       // Call the new Edge Function to create an Alipay order
       const { data, error } = await supabase.functions.invoke('create-alipay-order', {
@@ -98,7 +101,7 @@ const Payment = () => {
       });
 
       if (error) {
-        console.error('Error creating Alipay order:', error);
+        console.error('Error creating Alipay order:', error); // Log 5
         // Attempt to parse the error message from the backend
         let errorMessage = error.message || "创建支付订单时发生错误";
         try {
@@ -123,12 +126,14 @@ const Payment = () => {
         title: "支付订单已创建",
         description: "请扫描二维码完成支付",
       });
+      console.log('Alipay order created successfully, QR code URL:', data.qr_code_url); // Log 6
 
     } catch (error: any) {
       // Error already handled by toast above, just ensure loading state is reset
-      console.error('Caught error in handlePurchase:', error);
+      console.error('Caught error in handlePurchase:', error); // Log 7
     } finally {
       setPaymentLoading(false);
+      console.log('handlePurchase finished, paymentLoading set to false.'); // Log 8
     }
   };
 
