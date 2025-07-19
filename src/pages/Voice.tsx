@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client'; // Import supabase client
 
 interface VoiceOption {
   id: string;
@@ -169,9 +170,7 @@ const Voice = () => {
     setLoading(true);
     setAudioUrl(null); // Clear previous audio
 
-    let audioGenerationPrompt = text; // This will be the text actually sent to the audio API
-    let generatedAudioUrl: string | null = null; // Declared here at the top of the function
-    let rephrasedContent: string | undefined = undefined; // No rephrased content for these modes
+    let generatedAudioUrl: string | null = null; 
 
     try {
       if (selectedVoice === 'browser-native') {
@@ -190,35 +189,53 @@ const Voice = () => {
           throw new Error("您的浏览器不支持Web Speech API");
         }
       } else {
-        // Use Pollinations.ai API
-        if (readingMode === 'interpretive') {
-          // For interpretive, use the original text but let the voice model interpret it expressively.
-          audioGenerationPrompt = text; // Just the original text
-          toast({
-            title: "正在智能演绎文本...",
-            description: "AI正在以富有表现力的方式朗读您的文本。",
-            variant: "info"
-          });
-        } else if (readingMode === 'strict') {
-            // For strict reading, ensure the prompt explicitly tells the audio model to read verbatim.
-            audioGenerationPrompt = `请严格地、不加任何修改地朗读以下文本：${text}`;
-            toast({
-              title: "正在原文朗读文本...",
-              description: "AI正在严格按照原文朗读您的文本。",
-              variant: "info"
-            });
-        }
-        
-        generatedAudioUrl = `https://text.pollinations.ai/${encodeURIComponent(audioGenerationPrompt)}?model=openai-audio&voice=${selectedVoice}&nologo=true`;
-        
-        // Simulate loading delay for better UX
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Call the new Edge Function
+        const { data, error } = await supabase.functions.invoke('synthesize-voice', {
+          body: {
+            text: text,
+            voice: selectedVoice,
+            readingMode: readingMode
+          },
+          // The Edge Function will return the audio stream directly
+          // We need to get the blob and create a URL for the audio element
+          // Note: invoke() typically returns JSON, so we need to adjust how we handle the response.
+          // For streaming binary data, a direct fetch might be better, or the Edge Function
+          // needs to return a pre-signed URL to the audio.
+          // For simplicity, let's assume the Edge Function returns a direct URL to the audio.
+          // If the Edge Function streams, we'd need to handle it differently here.
+          // Given the current Edge Function returns a Response with body, we need to convert it to a Blob.
+        });
 
-        const audioResponse = await fetch(generatedAudioUrl);
-        if (!audioResponse.ok) {
-            const errorBody = await audioResponse.text();
-            throw new Error(`语音合成API错误: ${audioResponse.status} - ${errorBody}`);
+        if (error) {
+          throw new Error(error.message || "语音合成Edge Function调用失败");
         }
+        
+        // The Edge Function is designed to stream the audio directly.
+        // To play it in the browser, we need to create a Blob from the response stream.
+        // The `supabase.functions.invoke` method is designed for JSON responses.
+        // For streaming binary data, a direct `fetch` call to the Edge Function's URL is more appropriate.
+        const edgeFunctionUrl = `https://gwueqkusxarhomnabcrg.supabase.co/functions/v1/synthesize-voice`; // Hardcode URL for simplicity
+
+        const audioResponse = await fetch(edgeFunctionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` // Pass user's auth token
+          },
+          body: JSON.stringify({
+            text: text,
+            voice: selectedVoice,
+            readingMode: readingMode
+          })
+        });
+
+        if (!audioResponse.ok) {
+          const errorBody = await audioResponse.text();
+          throw new Error(`语音合成Edge Function错误: ${audioResponse.status} - ${errorBody}`);
+        }
+
+        const audioBlob = await audioResponse.blob();
+        generatedAudioUrl = URL.createObjectURL(audioBlob);
       }
       
       setAudioUrl(generatedAudioUrl);
@@ -230,7 +247,7 @@ const Voice = () => {
         text: text, // Always store original text in history
         audioUrl: generatedAudioUrl,
         readingMode: readingMode,
-        rephrasedText: rephrasedContent // This will always be undefined now for these modes
+        rephrasedText: undefined // No rephrased content for these modes
       };
       
       setHistory(prev => [newHistoryItem, ...prev.slice(0, 9)]);
