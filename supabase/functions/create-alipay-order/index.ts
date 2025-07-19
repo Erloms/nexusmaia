@@ -1,9 +1,9 @@
 // @ts-ignore
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
 // @ts-ignore
-import { v4 as uuidv4 } from "https://deno.land/std@0.168.0/uuid/mod.ts";
+import { v4 as uuidv4 } from "https://deno.land/std@0.224.0/uuid/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
