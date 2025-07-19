@@ -237,7 +237,8 @@ serve(async (req) => {
 
     if (orderError) {
       console.error('Supabase order insert error:', orderError);
-      throw new Error('创建订单失败');
+      // 改进错误信息，直接返回 Supabase 错误详情
+      throw new Error(`Supabase订单插入失败: ${orderError.message}`);
     }
     console.log('Order created in Supabase:', orderData);
 
@@ -347,7 +348,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error instanceof Error ? error.message : '创建订单失败' 
+        error: error instanceof Error ? error.message : '未知错误，创建订单失败' 
       }),
       { 
         status: 400,
