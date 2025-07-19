@@ -7,6 +7,7 @@ import Navigation from '@/components/Navigation';
 import ChatSidebar from '@/components/ChatSidebar';
 import { Send, Crown, MessageSquare, Bot, Sparkles, Wand2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client'; // Import supabase client
 
 interface Message {
   id: string;
@@ -190,162 +191,180 @@ const Chat = () => {
     }
   };
 
+  // Helper function to generate image using ZhipuAI Edge Function
+  const generateImageWithZhipu = async (imagePrompt: string, userId: string): Promise<string | null> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-image-zhipu', {
+        body: {
+          prompt: imagePrompt,
+          size: "1024x1024", // Default size for chat images
+          user_id: userId
+        }
+      });
+
+      if (error) {
+        console.error('Error calling generate-image-zhipu:', error);
+        toast({
+          title: "图片生成失败",
+          description: `无法生成图片: ${error.message}`,
+          variant: "destructive"
+        });
+        return null;
+      }
+
+      if (data && data.data && data.data.length > 0) {
+        return data.data[0].url;
+      }
+      return null;
+    } catch (err) {
+      console.error('Unexpected error in generateImageWithZhipu:', err);
+      return null;
+    }
+  };
+
   // 模拟智能体API调用
   const callAgentAPI = async (prompt: string, agentId: string): Promise<Message[]> => {
     setIsLoading(true);
     const generatedMessages: Message[] = [];
 
     try {
-      let fullMarkdownResponse = '';
-
       if (agentId === 'xiaohongshu-strategist') {
         const topic = prompt.replace('帮我分析', '').trim(); 
-        const randomSeed = () => Math.floor(Math.random() * 1000000);
+        const userId = user?.id || 'anonymous';
 
-        fullMarkdownResponse = `
-✨ **小红书爆款笔记生成** ✨
+        // Define image prompts for each section
+        const imagePrompts = {
+          emotional: "A cozy cat sleeping on a book, warm lighting, soft colors, high quality, no watermark",
+          practical: "A person studying analytics, vibrant colors, digital art, high quality, no watermark",
+          monetization: "A person counting money, surrounded by digital graphs, vibrant colors, abstract background, high quality, no watermark"
+        };
 
----
+        // Generate images concurrently
+        const [
+          imgUrl1, imgUrl2, imgUrl3, imgUrl4,
+          imgUrl5, imgUrl6, imgUrl7, imgUrl8,
+          imgUrl9, imgUrl10, imgUrl11, imgUrl12
+        ] = await Promise.all([
+          generateImageWithZhipu(imagePrompts.emotional, userId),
+          generateImageWithZhipu(imagePrompts.emotional, userId),
+          generateImageWithZhipu(imagePrompts.emotional, userId),
+          generateImageWithZhipu(imagePrompts.emotional, userId),
+          generateImageWithZhipu(imagePrompts.practical, userId),
+          generateImageWithZhipu(imagePrompts.practical, userId),
+          generateImageWithZhipu(imagePrompts.practical, userId),
+          generateImageWithZhipu(imagePrompts.practical, userId),
+          generateImageWithZhipu(imagePrompts.monetization, userId),
+          generateImageWithZhipu(imagePrompts.monetization, userId),
+          generateImageWithZhipu(imagePrompts.monetization, userId),
+          generateImageWithZhipu(imagePrompts.monetization, userId),
+        ]);
 
-### 📝 **文案主题：** ${topic || '你的小红书爆款秘籍'}
+        // Construct messages with text and images
+        generatedMessages.push({
+          id: Date.now().toString() + '-text-intro',
+          role: 'assistant',
+          content: `✨ **小红书爆款笔记生成** ✨\n\n---\n\n### 📝 **文案主题：** ${topic || '你的小红书爆款秘籍'}\n\n---\n\n#### **💡 爆款诊断与策略**\n根据你的需求，以下是小红书高互动笔记的3大核心策略：\n1.  **情绪共鸣：** 深入挖掘用户情感痛点，分享真实经历，引发读者共鸣和代入感。\n2.  **实用价值：** 提供具体、可操作的解决方案、教程或清单，让读者学到东西并能立即应用。\n3.  **视觉冲击：** 高质量的图片或视频是小红书的灵魂，结合内容主题，创造吸引眼球的视觉效果。\n\n---\n\n#### **✍️ 爆款文案模板（3套变体）**`,
+          timestamp: new Date(),
+          type: 'text'
+        });
 
----
+        // 1. 情感共鸣型
+        generatedMessages.push({
+          id: Date.now().toString() + '-text-emotional-intro',
+          role: 'assistant',
+          content: `**1. 情感共鸣型：**\n**标题：** 💔 别再emo了！这几句话，治愈了我的小红书焦虑症！\n**正文：**\n姐妹们，是不是也和我一样，每次发小红书笔记都石沉大海？是不是总觉得自己不够好，笔记没人看？我懂你！曾经我也深陷这种情绪，直到我学会了这几招，瞬间被治愈！\n- 生活再难，也要给自己一点甜，小红书就是我的精神角落。\n- 你不是一个人在战斗，我们都在努力变好！\n- 相信自己，你的每一次分享都值得被看见！\n- 愿你的小红书，成为你温暖的避风港。\n**话题标签：** #小红书运营 #内容创作 #情绪价值 #自我成长 #治愈系\n**互动引导：** 评论区告诉我，你最近的“小确幸”是什么？👇`,
+          timestamp: new Date(),
+          type: 'text'
+        });
+        if (imgUrl1) generatedMessages.push({ id: Date.now().toString() + '-img-1', role: 'assistant', content: '配图1', imageUrl: imgUrl1, timestamp: new Date(), type: 'image' });
+        if (imgUrl2) generatedMessages.push({ id: Date.now().toString() + '-img-2', role: 'assistant', content: '配图2', imageUrl: imgUrl2, timestamp: new Date(), type: 'image' });
+        if (imgUrl3) generatedMessages.push({ id: Date.now().toString() + '-img-3', role: 'assistant', content: '配图3', imageUrl: imgUrl3, timestamp: new Date(), type: 'image' });
+        if (imgUrl4) generatedMessages.push({ id: Date.now().toString() + '-img-4', role: 'assistant', content: '配图4', imageUrl: imgUrl4, timestamp: new Date(), type: 'image' });
 
-#### **💡 爆款诊断与策略**
-根据你的需求，以下是小红书高互动笔记的3大核心策略：
-1.  **情绪共鸣：** 深入挖掘用户情感痛点，分享真实经历，引发读者共鸣和代入感。
-2.  **实用价值：** 提供具体、可操作的解决方案、教程或清单，让读者学到东西并能立即应用。
-3.  **视觉冲击：** 高质量的图片或视频是小红书的灵魂，结合内容主题，创造吸引眼球的视觉效果。
+        // 2. 实用干货型
+        generatedMessages.push({
+          id: Date.now().toString() + '-text-practical-intro',
+          role: 'assistant',
+          content: `\n---\n\n**2. 实用干货型：**\n**标题：** 😱 震惊！我竟然靠这3招，让小红书笔记阅读量翻了10倍！\n**正文：**\n姐妹们，是不是也和我一样，每次发小红书笔记都石沉大海？别急！今天我把压箱底的爆款秘籍分享给你们，亲测有效！\n1.  **悬念钩子：** “你以为小红书只有颜值？错！这才是真正能让你涨粉的秘密武器！”\n2.  **数字清单：** “3个步骤，让你轻松打造高互动笔记，小白也能变大神！”\n3.  **身份认同：** “如果你也是内容创作者，这条笔记你一定要看完！”\n4.  **紧急感：** “再不学就晚了！小红书算法又变了，赶紧抓住这波红利！”\n**话题标签：** #小红书涨粉 #运营技巧 #干货分享 #自媒体 #流量变现\n**互动引导：** 收藏这篇笔记，下次发文不迷路！你还有哪些涨粉小技巧？评论区分享！👇`,
+          timestamp: new Date(),
+          type: 'text'
+        });
+        if (imgUrl5) generatedMessages.push({ id: Date.now().toString() + '-img-5', role: 'assistant', content: '配图1', imageUrl: imgUrl5, timestamp: new Date(), type: 'image' });
+        if (imgUrl6) generatedMessages.push({ id: Date.now().toString() + '-img-6', role: 'assistant', content: '配图2', imageUrl: imgUrl6, timestamp: new Date(), type: 'image' });
+        if (imgUrl7) generatedMessages.push({ id: Date.now().toString() + '-img-7', role: 'assistant', content: '配图3', imageUrl: imgUrl7, timestamp: new Date(), type: 'image' });
+        if (imgUrl8) generatedMessages.push({ id: Date.now().toString() + '-img-8', role: 'assistant', content: '配图4', imageUrl: imgUrl8, timestamp: new Date(), type: 'image' });
 
----
+        // 3. 商业变现型
+        generatedMessages.push({
+          id: Date.now().toString() + '-text-monetization-intro',
+          role: 'assistant',
+          content: `\n---\n\n**3. 商业变现型：**\n**标题：** 💰 0基础小白，30天小红书变现10000+，我做到了！\n**正文：**\n别再羡慕别人了！我一个普通人，只用了30天，就在小红书实现了月入过万！今天把我的秘诀毫无保留地分享给你！\n1.  **收益可视化：** “上个月我的小红书收益截图，真实数据，不P图！”\n2.  **素人可复制：** “我不是什么大V，普通人也能轻松上手，跟着我做就行！”\n3.  **步骤拆解：** “第一步：定位你的赛道；第二步：打造爆款内容；第三步：高效引流变现！”\n4.  **资源包钩子：** “评论区留言‘变现’，免费送你我的小红书变现秘籍资料包！”\n**话题标签：** #小红书变现 #副业赚钱 #0基础创业 #赚钱攻略 #个人IP\n**互动引导：** 想要这份变现资料包吗？点赞+关注，私信我“变现”即可领取！🚀`,
+          timestamp: new Date(),
+          type: 'text'
+        });
+        if (imgUrl9) generatedMessages.push({ id: Date.now().toString() + '-img-9', role: 'assistant', content: '配图1', imageUrl: imgUrl9, timestamp: new Date(), type: 'image' });
+        if (imgUrl10) generatedMessages.push({ id: Date.now().toString() + '-img-10', role: 'assistant', content: '配图2', imageUrl: imgUrl10, timestamp: new Date(), type: 'image' });
+        if (imgUrl11) generatedMessages.push({ id: Date.now().toString() + '-img-11', role: 'assistant', content: '配图3', imageUrl: imgUrl11, timestamp: new Date(), type: 'image' });
+        if (imgUrl12) generatedMessages.push({ id: Date.now().toString() + '-img-12', role: 'assistant', content: '配图4', imageUrl: imgUrl12, timestamp: new Date(), type: 'image' });
 
-#### **✍️ 爆款文案模板（3套变体）**
+        generatedMessages.push({
+          id: Date.now().toString() + '-text-footer',
+          role: 'assistant',
+          content: `\n---\n\n**👑 提示：**\n以上文案和配图仅为示例，您可以根据实际需求调整内容和图片提示词。智谱AI的 CogView-3-Flash 模型将为您生成高质量的无水印图片。`,
+          timestamp: new Date(),
+          type: 'text'
+        });
 
-**1. 情感共鸣型：**
-**标题：** 💔 别再emo了！这几句话，治愈了我的小红书焦虑症！
-**正文：**
-姐妹们，是不是也和我一样，每次发小红书笔记都石沉大海？是不是总觉得自己不够好，笔记没人看？我懂你！曾经我也深陷这种情绪，直到我学会了这几招，瞬间被治愈！
-- 生活再难，也要给自己一点甜，小红书就是我的精神角落。
-- 你不是一个人在战斗，我们都在努力变好！
-- 相信自己，你的每一次分享都值得被看见！
-- 愿你的小红书，成为你温暖的避风港。
-**话题标签：** #小红书运营 #内容创作 #情绪价值 #自我成长 #治愈系
-**互动引导：** 评论区告诉我，你最近的“小确幸”是什么？👇
-**配图建议：**
-![配图1](https://image.pollinations.ai/prompt/A cozy cat sleeping on a book, warm lighting, soft colors&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
-![配图2](https://image.pollinations.ai/prompt/A cozy cat sleeping on a book, warm lighting, soft colors&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
-
----
-
-**2. 实用干货型：**
-**标题：** 😱 震惊！我竟然靠这3招，让小红书笔记阅读量翻了10倍！
-**正文：**
-姐妹们，是不是也和我一样，每次发小红书笔记都石沉大海？别急！今天我把压箱底的爆款秘籍分享给你们，亲测有效！
-1.  **悬念钩子：** “你以为小红书只有颜值？错！这才是真正能让你涨粉的秘密武器！”
-2.  **数字清单：** “3个步骤，让你轻松打造高互动笔记，小白也能变大神！”
-3.  **身份认同：** “如果你也是内容创作者，这条笔记你一定要看完！”
-4.  **紧急感：** “再不学就晚了！小红书算法又变了，赶紧抓住这波红利！”
-**话题标签：** #小红书涨粉 #运营技巧 #干货分享 #自媒体 #流量变现
-**互动引导：** 收藏这篇笔记，下次发文不迷路！你还有哪些涨粉小技巧？评论区分享！👇
-**配图建议：**
-![配图1](https://image.pollinations.ai/prompt/A person studying analytics, vibrant colors, digital art&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
-![配图2](https://image.pollinations.ai/prompt/A person writing in a notebook, creative ideas, bright colors&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
-
----
-
-**3. 商业变现型：**
-**标题：** 💰 0基础小白，30天小红书变现10000+，我做到了！
-**正文：**
-别再羡慕别人了！我一个普通人，只用了30天，就在小红书实现了月入过万！今天把我的秘诀毫无保留地分享给你！
-1.  **收益可视化：** “上个月我的小红书收益截图，真实数据，不P图！”
-2.  **素人可复制：** “我不是什么大V，普通人也能轻松上手，跟着我做就行！”
-3.  **步骤拆解：** “第一步：定位你的赛道；第二步：打造爆款内容；第三步：高效引流变现！”
-4.  **资源包钩子：** “评论区留言‘变现’，免费送你我的小红书变现秘籍资料包！”
-**话题标签：** #小红书变现 #副业赚钱 #0基础创业 #赚钱攻略 #个人IP
-**互动引导：** 想要这份变现资料包吗？点赞+关注，私信我“变现”即可领取！🚀
-**配图建议：**
-![配图1](https://image.pollinations.ai/prompt/A person counting money, surrounded by digital graphs, vibrant colors&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
-![配图2](https://image.pollinations.ai/prompt/A person counting money, surrounded by digital graphs, vibrant colors, abstract background&width=1024&height=1024&seed=${randomSeed()}&model=flux&nologo=true)
-
----
-
-**🎨 绘画技能提示：**
-你可以根据文案内容，自由发挥创意，生成对应的英文提示词来定制图片。例如：
-\`\`\`
-https://image.pollinations.ai/prompt/{英文提示词}?width=1024&height=1024&seed={随机种子}&model=flux&nologo=true
-\`\`\`
-请将 \`{英文提示词}\` 替换为你的图片描述，\`{随机种子}\` 替换为任意数字。
-`;
       } else if (agentId === 'code-generator') {
-        fullMarkdownResponse = `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那契数列的函数。”`;
+        generatedMessages.push({
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `您选择了代码生成器。请告诉我您需要生成什么语言的代码，以及具体的功能需求，例如：“用Python写一个计算斐波那契数列的函数。”`,
+          timestamp: new Date(),
+          type: 'text'
+        });
       } else if (agentId === 'resume-optimizer') {
-        fullMarkdownResponse = `您选择了简历优化师。请粘贴您的简历内容，或者告诉我您的目标职位和主要经历，我将为您提供优化建议。`;
+        generatedMessages.push({
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `您选择了简历优化师。请粘贴您的简历内容，或者告诉我您的目标职位和主要经历，我将为您提供优化建议。`,
+          timestamp: new Date(),
+          type: 'text'
+        });
       } else if (agentId === 'mental-wellness-assistant') {
-        fullMarkdownResponse = `您选择了心理咨询助手。请告诉我您现在的心情或遇到的困扰，我将尽力为您提供支持和一些建议。请注意，我无法替代专业的心理医生。`;
+        generatedMessages.push({
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `您选择了心理咨询助手。请告诉我您现在的心情或遇到的困扰，我将尽力为您提供支持和一些建议。请注意，我无法替代专业的心理医生。`,
+          timestamp: new Date(),
+          type: 'text'
+        });
       } else if (agentId === 'business-analyst') {
-        fullMarkdownResponse = `您选择了商业数据分析师。目前我只能基于您提供的文本信息进行模拟分析。请描述您想分析的数据类型和问题，例如：“分析一下过去一年销售额的增长趋势。”`;
+        generatedMessages.push({
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `您选择了商业数据分析师。目前我只能基于您提供的文本信息进行模拟分析。请描述您想分析的数据类型和问题，例如：“分析一下过去一年销售额的增长趋势。”`,
+          timestamp: new Date(),
+          type: 'text'
+        });
       } else {
+        // Fallback for other agents
         const encodedPrompt = encodeURIComponent(prompt);
         const apiUrl = `https://text.pollinations.ai/${encodedPrompt}?model=openai-audio&nologo=true`; 
         const response = await fetch(apiUrl);
         if (!response.ok) {
           throw new Error(`API响应错误: ${response.status}`);
         }
-        fullMarkdownResponse = await response.text(); // Get full text response
-      }
-
-      // Parse markdown for images and text
-      const imageRegex = /!\[(.*?)\]\((https:\/\/image\.pollinations\.ai\/prompt\/.*?)\)/g;
-      let lastIndex = 0;
-      let match;
-
-      while ((match = imageRegex.exec(fullMarkdownResponse)) !== null) {
-          const textBefore = fullMarkdownResponse.substring(lastIndex, match.index).trim();
-          if (textBefore) {
-              generatedMessages.push({
-                  id: Date.now().toString() + '-text-' + generatedMessages.length,
-                  role: 'assistant',
-                  content: textBefore,
-                  timestamp: new Date(),
-                  type: 'text'
-              });
-          }
-
-          const altText = match[1];
-          const imageUrl = match[2];
-          generatedMessages.push({
-              id: Date.now().toString() + '-image-' + generatedMessages.length,
-              role: 'assistant',
-              content: altText, 
-              imageUrl: imageUrl,
-              timestamp: new Date(),
-              type: 'image'
-          });
-          lastIndex = imageRegex.lastIndex;
-      }
-
-      const remainingText = fullMarkdownResponse.substring(lastIndex).trim();
-      if (remainingText) {
-          generatedMessages.push({
-              id: Date.now().toString() + '-text-final',
-              role: 'assistant',
-              content: remainingText,
-              timestamp: new Date(),
-              type: 'text'
-          });
-      }
-
-      // If no images were found, and there's still content, add it as a single text message
-      if (generatedMessages.length === 0 && fullMarkdownResponse.trim()) {
+        const textResponse = await response.text();
         generatedMessages.push({
-          id: Date.now().toString() + '-text-single',
+          id: Date.now().toString(),
           role: 'assistant',
-          content: fullMarkdownResponse.trim(),
+          content: textResponse,
           timestamp: new Date(),
           type: 'text'
         });
       }
-
+      
       // Simulate loading delay
       await new Promise(resolve => setTimeout(resolve, 2000));
       
