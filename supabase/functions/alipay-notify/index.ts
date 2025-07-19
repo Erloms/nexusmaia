@@ -58,15 +58,25 @@ serve(async (req) => {
     // --- IMPORTANT: REAL ALIPAY SIGNATURE VERIFICATION GOES HERE ---
     // In a real production environment, you MUST implement robust signature verification.
     // This involves:
-    // 1. Reconstructing the string to be signed from the received parameters (excluding 'sign' and 'sign_type').
+    // 1. Reconstructing the string to be signed from the received parameters.
+    //    Exclude 'sign' and 'sign_type' from the parameters used for signing.
     //    Parameters should be sorted alphabetically and concatenated in 'key=value&' format.
     // 2. Using Alipay's public key (alipayConfig.alipay_public_key) to verify the 'sign' parameter
-    //    against the reconstructed string.
-    // 3. Also verify `app_id` matches your configured `alipayConfig.alipay_app_id`.
+    //    against the reconstructed string. The algorithm should be RSA2 (SHA256WithRSA).
+    //    You will likely need a Deno-compatible RSA verification library for this.
+    // 3. Also verify `app_id` from the notification matches your configured `alipayConfig.alipay_app_id`.
     // 4. Check `seller_id` if applicable.
     // If verification fails, return 'fail'.
-    // For this demo, we'll simulate success.
-    const isSignatureValid = true; // Replace with actual verification logic
+
+    // Example of how you might prepare parameters for verification (simplified)
+    // const paramsToVerify = { ...params };
+    // delete paramsToVerify.sign;
+    // delete paramsToVerify.sign_type;
+    // const sortedKeys = Object.keys(paramsToVerify).sort();
+    // const verifyContent = sortedKeys.map(key => `${key}=${paramsToVerify[key]}`).join('&');
+    // const isSignatureValid = await yourRsaVerificationFunction(verifyContent, sign, alipayConfig.alipay_public_key, sign_type);
+
+    const isSignatureValid = true; // Placeholder: Replace with actual verification logic
     const isAppIdValid = (app_id === alipayConfig.alipay_app_id); // Verify app_id
 
     if (!isSignatureValid || !isAppIdValid) {
@@ -88,13 +98,13 @@ serve(async (req) => {
 
       if (orderError || !order) {
         console.error(`Order not found or error fetching order for payment_id: ${out_trade_no}`, orderError);
-        return new Response('fail', { status: 500 });
+        return new Response('fail', { status: 500 }); // Order not found in our system
       }
 
       // Check if the order is already processed to prevent duplicate processing
       if (order.status === 'completed') {
         console.log(`Order ${order.id} already completed. Skipping.`);
-        return new Response('success', { status: 200 }); // Already processed, return success to Alipay
+        return new Response('success', { status: 200 }); // Already processed, return 'success' to Alipay
       }
 
       // Update order status to 'completed'
@@ -105,7 +115,7 @@ serve(async (req) => {
 
       if (updateError) {
         console.error(`Failed to update order status for ${order.id}:`, updateError);
-        return new Response('fail', { status: 500 });
+        return new Response('fail', { status: 500 }); // Database update failed
       }
 
       // Activate user membership using the RPC function
@@ -118,7 +128,7 @@ serve(async (req) => {
       if (activateError) {
         console.error(`Failed to activate membership for user ${order.user_id} with plan ${order.plan_id}:`, activateError);
         // Depending on your business logic, you might want to revert order status or log for manual review
-        return new Response('fail', { status: 500 });
+        return new Response('fail', { status: 500 }); // Membership activation failed
       }
 
       console.log(`Membership activated for user ${order.user_id} via order ${order.id}`);
