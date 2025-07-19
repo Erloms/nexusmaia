@@ -143,10 +143,22 @@ serve(async (req) => {
     const rawBody = await clonedReq.text();
     console.log('Raw request body received by Edge Function:', rawBody); // Added log
 
-    const { subject, total_amount, product_id } = await req.json() as CreateOrderRequest;
+    let requestBody: CreateOrderRequest;
+    try {
+      requestBody = JSON.parse(rawBody);
+      console.log('Parsed request body:', requestBody);
+    } catch (parseError) {
+      console.error('Error parsing request body as JSON:', parseError);
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON in request body' }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
 
-    // 添加日志输出，检查接收到的参数
-    console.log('Parsed request body:', { subject, total_amount, product_id });
+    const { subject, total_amount, product_id } = requestBody;
 
     // 修正：正确验证请求体参数
     if (!subject || total_amount === undefined || total_amount === null || !product_id) { // Explicitly check for total_amount
