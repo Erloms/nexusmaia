@@ -2,8 +2,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.9";
-// @ts-ignore
-import { parse } from "https://deno.land/std@0.190.0/node/querystring.ts"; // Changed to 0.190.0
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,18 +28,17 @@ serve(async (req) => {
   try {
     // Alipay notifications are typically application/x-www-form-urlencoded
     const requestBody = await req.text();
-    const params = parse(requestBody);
+    // Use URLSearchParams for robust parsing of form-urlencoded data
+    const params = new URLSearchParams(requestBody);
 
-    const {
-      app_id,
-      out_trade_no, // Our internal order ID (payment_id in our orders table)
-      trade_status,
-      sign,
-      sign_type,
-      // ... other parameters from Alipay notification
-    } = params;
+    const app_id = params.get('app_id');
+    const out_trade_no = params.get('out_trade_no'); // Our internal order ID (payment_id in our orders table)
+    const trade_status = params.get('trade_status');
+    const sign = params.get('sign');
+    const sign_type = params.get('sign_type');
+    // ... other parameters from Alipay notification can be accessed via params.get('key')
 
-    console.log('Alipay Notify Received:', params);
+    console.log('Alipay Notify Received:', Object.fromEntries(params.entries()));
 
     // 1. Fetch Alipay configuration (especially public key for verification)
     const { data: alipayConfig, error: configError } = await supabaseClient
@@ -69,11 +66,11 @@ serve(async (req) => {
     // If verification fails, return 'fail'.
 
     // Example of how you might prepare parameters for verification (simplified)
-    // const paramsToVerify = { ...params };
-    // delete paramsToVerify.sign;
-    // delete paramsToVerify.sign_type;
-    // const sortedKeys = Object.keys(paramsToVerify).sort();
-    // const verifyContent = sortedKeys.map(key => `${key}=${paramsToVerify[key]}`).join('&');
+    // const paramsToVerify = new URLSearchParams(requestBody);
+    // paramsToVerify.delete('sign');
+    // paramsToVerify.delete('sign_type');
+    // const sortedKeys = Array.from(paramsToVerify.keys()).sort();
+    // const verifyContent = sortedKeys.map(key => `${key}=${paramsToVerify.get(key)}`).join('&');
     // const isSignatureValid = await yourRsaVerificationFunction(verifyContent, sign, alipayConfig.alipay_public_key, sign_type);
 
     const isSignatureValid = true; // Placeholder: Replace with actual verification logic
