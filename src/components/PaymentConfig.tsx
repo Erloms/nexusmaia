@@ -18,37 +18,20 @@ const PaymentConfig = () => {
     app_public_key: '',
     alipay_gateway_url: 'https://openapi.alipay.com/gateway.do',
     notify_url: '',
-    return_url: 'https://nexus.m7ai.top/payment-success', // Updated default return_url
+    return_url: 'https://nexus.m7ai.top/payment-success',
     is_sandbox: false,
   });
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  // Helper to ensure PEM format
-  const ensurePemFormat = (key: string, type: 'private' | 'public' | 'app_public') => {
+  // Helper to clean key: remove all whitespace and common PEM headers/footers
+  const cleanKey = (key: string) => {
     if (!key) return '';
-
-    let header = '';
-    let footer = '';
-    if (type === 'private') {
-      header = '-----BEGIN PRIVATE KEY-----';
-      footer = '-----END PRIVATE KEY-----';
-    } else if (type === 'public' || type === 'app_public') {
-      header = '-----BEGIN PUBLIC KEY-----';
-      footer = '-----END PUBLIC KEY-----';
-    }
-
-    // Remove existing headers/footers and all whitespace from the content
-    let cleanedContent = key
-      .replace(header, '')
-      .replace(footer, '')
-      .replace(/\s/g, ''); // Remove all whitespace from the base64 content
-
-    // Add line breaks every 64 characters for standard PEM formatting
-    const formattedContent = cleanedContent.match(/.{1,64}/g)?.join('\n') || cleanedContent;
-
-    return `${header}\n${formattedContent}\n${footer}`;
+    return key
+      .replace(/-----BEGIN (RSA )?(PRIVATE|PUBLIC) KEY-----/g, '')
+      .replace(/-----END (RSA )?(PRIVATE|PUBLIC) KEY-----/g, '')
+      .replace(/\s/g, ''); // Remove all whitespace
   };
 
   useEffect(() => {
@@ -60,19 +43,19 @@ const PaymentConfig = () => {
         });
 
         if (error) {
-          if (error.status !== 404) {
+          if (error.status !== 404) { // 404 means no config found, which is fine
             throw error;
           }
         }
         
         if (data) {
-          // Apply PEM formatting to keys when loading them from DB for display in Textarea
+          // When loading, clean the keys to ensure state holds raw Base64
           setConfig(prevConfig => ({
             ...prevConfig,
             ...data,
-            alipay_private_key: ensurePemFormat(data.alipay_private_key || '', 'private'),
-            alipay_public_key: ensurePemFormat(data.alipay_public_key || '', 'public'),
-            app_public_key: ensurePemFormat(data.app_public_key || '', 'app_public'),
+            alipay_private_key: cleanKey(data.alipay_private_key || ''),
+            alipay_public_key: cleanKey(data.alipay_public_key || ''),
+            app_public_key: cleanKey(data.app_public_key || ''),
           }));
         }
       } catch (error: any) {
@@ -90,16 +73,16 @@ const PaymentConfig = () => {
   }, []);
 
   const handleSave = async () => {
-    // Apply PEM formatting before saving
-    const formattedConfig = {
+    // Clean the keys before sending to the Edge Function
+    const cleanedConfig = {
       ...config,
-      alipay_private_key: ensurePemFormat(config.alipay_private_key, 'private'),
-      alipay_public_key: ensurePemFormat(config.alipay_public_key, 'public'),
-      app_public_key: ensurePemFormat(config.app_public_key, 'app_public'),
+      alipay_private_key: cleanKey(config.alipay_private_key),
+      alipay_public_key: cleanKey(config.alipay_public_key),
+      app_public_key: cleanKey(config.app_public_key),
     };
 
     // Basic validation for required URLs
-    if (!formattedConfig.notify_url || !formattedConfig.return_url) {
+    if (!cleanedConfig.notify_url || !cleanedConfig.return_url) {
       toast({
         title: "配置不完整",
         description: "异步通知地址和同步返回地址不能为空。",
@@ -112,7 +95,7 @@ const PaymentConfig = () => {
     try {
       const { data, error } = await supabase.functions.invoke('payment-config', {
         method: 'POST',
-        body: formattedConfig
+        body: cleanedConfig
       });
 
       if (error) throw error;
@@ -121,9 +104,8 @@ const PaymentConfig = () => {
         title: "配置保存成功",
         description: "支付宝配置已更新",
       });
-      // Update local state with the formatted keys after successful save
-      // This is important to ensure the displayed value is consistent with what's saved
-      setConfig(formattedConfig);
+      // Update local state with the cleaned keys after successful save
+      setConfig(cleanedConfig);
     } catch (error: any) {
       console.error('Error saving payment config:', error);
       toast({
@@ -176,7 +158,7 @@ const PaymentConfig = () => {
                     id="private_key"
                     value={showPrivateKey ? config.alipay_private_key : config.alipay_private_key.replace(/./g, '*')}
                     onChange={(e) => setConfig({...config, alipay_private_key: e.target.value})}
-                    placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                    placeholder="请粘贴您的应用私钥（纯Base64内容，不含BEGIN/END行）"
                     className="min-h-32 bg-[#14202c] border-[#2e4258] text-white"
                   />
                   <Button
@@ -189,19 +171,22 @@ const PaymentConfig = () => {
                     {showPrivateKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  请确保是**PKCS8格式**的私钥，且只粘贴Base64内容，不含`-----BEGIN PRIVATE KEY-----`和`-----END PRIVATE KEY-----`。
+                </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="app_public_key" className="text-white">应用公钥 (App Public Key)</Label>
                 <Textarea
                   id="app_public_key"
-                  value={config.app_public_key || ''} // Ensure it's not null
+                  value={config.app_public_key || ''}
                   onChange={(e) => setConfig({...config, app_public_key: e.target.value})}
-                  placeholder="-----BEGIN PUBLIC KEY-----&#10;...&#10;-----END PUBLIC KEY-----"
+                  placeholder="请粘贴您在支付宝开放平台上传的**应用公钥**（纯Base64内容）"
                   className="min-h-32 bg-[#14202c] border-[#2e4258] text-white"
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  这是您在支付宝开放平台上传的**应用公钥**，用于支付宝验证您的请求签名。
+                  这是您在支付宝开放平台上传的**应用公钥**，用于支付宝验证您的请求签名。请只粘贴Base64内容。
                 </p>
               </div>
 
@@ -211,11 +196,11 @@ const PaymentConfig = () => {
                   id="alipay_public_key"
                   value={config.alipay_public_key}
                   onChange={(e) => setConfig({...config, alipay_public_key: e.target.value})}
-                  placeholder="-----BEGIN PUBLIC KEY-----&#10;...&#10;-----END PUBLIC KEY-----"
+                  placeholder="请粘贴从支付宝开放平台下载的**支付宝公钥**（纯Base64内容）"
                   className="min-h-32 bg-[#14202c] border-[#2e4258] text-white"
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  这是支付宝提供给您的**支付宝公钥**，用于您验证支付宝的回调通知签名。
+                  这是支付宝提供给您的**支付宝公钥**，用于您验证支付宝的回调通知签名。请只粘贴Base64内容。
                 </p>
               </div>
 
