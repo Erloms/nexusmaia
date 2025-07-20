@@ -197,7 +197,13 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       console.error('Missing Authorization header');
-      throw new Error('缺少认证信息');
+      return new Response(
+        JSON.stringify({ error: '缺少认证信息' }),
+        { 
+          status: 401, // Unauthorized
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     const token = authHeader.replace('Bearer ', '');
@@ -205,7 +211,13 @@ serve(async (req) => {
     
     if (userError || !user) {
       console.error('User authentication failed:', userError);
-      throw new Error('用户认证失败');
+      return new Response(
+        JSON.stringify({ error: '用户认证失败' }),
+        { 
+          status: 401, // Unauthorized
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
     console.log('Authenticated user:', user.id);
 
@@ -268,7 +280,13 @@ serve(async (req) => {
 
     if (orderError) {
       console.error('Supabase order insert error:', orderError);
-      throw new Error(`Supabase订单插入失败: ${orderError.message}`);
+      return new Response(
+        JSON.stringify({ error: `Supabase订单插入失败: ${orderError.message}` }),
+        { 
+          status: 500, // Internal Server Error
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
     console.log('Order created in Supabase:', orderData);
 
@@ -288,14 +306,27 @@ serve(async (req) => {
       out_trade_no: orderNumber,
       total_amount: total_amount.toFixed(2),
       subject: subject,
-      product_code: 'FACE_TO_FACE_PAYMENT', // Changed to FACE_TO_FACE_PAYMENT for precreate
+      product_code: 'FACE_TO_FACE_PAYMENT', // This is correct for alipay.trade.precreate
     };
 
     const allParams = { ...commonParams, biz_content: JSON.stringify(bizContent) };
     const signString = AlipayRSAUtils.buildSignString(allParams);
     console.log('Signing string:', signString); // Log the string being signed
     
-    const privateKey = await AlipayRSAUtils.importPrivateKey(config.alipay_private_key);
+    let privateKey: CryptoKey;
+    try {
+      privateKey = await AlipayRSAUtils.importPrivateKey(config.alipay_private_key);
+    } catch (e: any) {
+      console.error('Error importing private key:', e);
+      return new Response(
+        JSON.stringify({ error: `私钥导入失败: ${e.message}. 请检查私钥格式是否正确 (PKCS8纯Base64)。` }),
+        { 
+          status: 500, // Internal Server Error
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     const signature = await AlipayRSAUtils.signRSA2(signString, privateKey);
     console.log('Generated signature:', signature); // Log the generated signature
 
@@ -322,7 +353,13 @@ serve(async (req) => {
       alipayResult = JSON.parse(alipayResultText);
     } catch (parseError) {
       console.error('Failed to parse Alipay response as JSON:', parseError);
-      throw new Error(`支付宝响应解析失败: ${alipayResultText}`);
+      return new Response(
+        JSON.stringify({ error: `支付宝响应解析失败: ${alipayResultText}` }),
+        { 
+          status: 500, // Internal Server Error
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     const precreateResponse = alipayResult.alipay_trade_precreate_response;
@@ -330,20 +367,35 @@ serve(async (req) => {
 
     if (!precreateResponse || precreateResponse.code !== '10000') {
       console.error('Alipay precreate failed:', precreateResponse);
-      throw new Error(`支付宝业务错误: ${precreateResponse?.msg || precreateResponse?.sub_msg || '未知错误'}`);
+      return new Response(
+        JSON.stringify({ error: `支付宝业务错误: ${precreateResponse?.msg || precreateResponse?.sub_msg || '未知错误'}` }),
+        { 
+          status: 400, // Bad Request from Alipay, so our function returns 400
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     // Verify Alipay's signature on its response (optional but recommended)
     // Note: The response string to be verified should exclude the sign and sign_type fields.
     // It should be the JSON string of the response object itself.
     const responseToVerify = JSON.stringify(precreateResponse);
-    const alipayPublicKey = await AlipayRSAUtils.importPublicKey(config.alipay_public_key);
-    const isAlipaySignatureValid = await AlipayRSAUtils.verifyRSA2(responseToVerify, alipaySign, alipayPublicKey);
+    let alipayPublicKey: CryptoKey;
+    try {
+      alipayPublicKey = await AlipayRSAUtils.importPublicKey(config.alipay_public_key);
+    } catch (e: any) {
+      console.warn('Error importing Alipay public key for verification:', e);
+      // Do not throw, as this is for verification of Alipay's response, not our request.
+    }
     
-    if (!isAlipaySignatureValid) {
-      console.warn('Alipay response signature verification failed!');
-      // Depending on your security requirements, you might throw an error here.
-      // For now, we'll log a warning and proceed.
+    // Only attempt verification if publicKey was successfully imported
+    if (alipayPublicKey) {
+      const isAlipaySignatureValid = await AlipayRSAUtils.verifyRSA2(responseToVerify, alipaySign, alipayPublicKey);
+      if (!isAlipaySignatureValid) {
+        console.warn('Alipay response signature verification failed!');
+        // Depending on your security requirements, you might throw an error here.
+        // For now, we'll log a warning and proceed.
+      }
     }
 
     await supabaseClient
@@ -376,7 +428,7 @@ serve(async (req) => {
         error: userErrorMessage
       }),
       {
-        status: 400,
+        status: 500, // Changed to 500 for internal server errors
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
