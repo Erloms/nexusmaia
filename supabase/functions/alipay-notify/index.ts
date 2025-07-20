@@ -2,115 +2,8 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.9'
-
-// RSA2 签名和验签工具函数 (内联)
-class AlipayRSAUtils {
-  
-  // 将 PEM 格式的私钥转换为 CryptoKey
-  static async importPrivateKey(pemKey: string): Promise<CryptoKey> {
-    // 清理 PEM 格式
-    const pemHeader = "-----BEGIN PRIVATE KEY-----";
-    const pemFooter = "-----END PRIVATE KEY-----";
-    const pemContents = pemKey
-      .replace(pemHeader, "")
-      .replace(pemFooter, "")
-      .replace(/\s/g, "");
-    
-    // Base64 解码
-    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-    
-    // 导入私钥
-    return await crypto.subtle.importKey(
-      "pkcs8",
-      binaryDer,
-      {
-        name: "RSASSA-PKCS1-v1_5",
-        hash: "SHA-256",
-      },
-      false,
-      ["sign"]
-    );
-  }
-
-  // 将 PEM 格式的公钥转换为 CryptoKey
-  static async importPublicKey(pemKey: string): Promise<CryptoKey> {
-    // 清理 PEM 格式
-    const pemHeader = "-----BEGIN PUBLIC KEY-----";
-    const pemFooter = "-----END PUBLIC KEY-----";
-    const pemContents = pemKey
-      .replace(pemHeader, "")
-      .replace(pemFooter, "")
-      .replace(/\s/g, "");
-    
-    // Base64 解码
-    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-    
-    // 导入公钥
-    return await crypto.subtle.importKey(
-      "spki",
-      binaryDer,
-      {
-        name: "RSASSA-PKCS1-v1_5",
-        hash: "SHA-256",
-      },
-      false,
-      ["verify"]
-    );
-  }
-
-  // 对字符串进行 RSA2 签名
-  static async signRSA2(data: string, privateKey: CryptoKey): Promise<string> {
-    const encoder = new TextEncoder();
-    const dataBuffer = encoder.encode(data);
-    
-    const signature = await crypto.subtle.sign(
-      "RSASSA-PKCS1-v1_5",
-      privateKey,
-      dataBuffer
-    );
-
-    // 将签名转换为 Base64
-    return btoa(String.fromCharCode(...new Uint8Array(signature)));
-  }
-
-  // 验证 RSA2 签名
-  static async verifyRSA2(data: string, signature: string, publicKey: CryptoKey): Promise<boolean> {
-    try {
-      const encoder = new TextEncoder();
-      const dataBuffer = encoder.encode(data);
-      
-      // Base64 解码签名
-      const signatureBuffer = Uint8Array.from(atob(signature), c => c.charCodeAt(0));
-      
-      return await crypto.subtle.verify(
-        "RSASSA-PKCS1-v1_5",
-        publicKey,
-        signatureBuffer,
-        dataBuffer
-      );
-    } catch (error) {
-      console.error('签名验证失败:', error);
-      return false;
-    }
-  }
-
-  // 构建支付宝签名字符串
-  static buildSignString(params: Record<string, any>): string {
-    // 过滤空值并排序
-    const filteredParams = Object.keys(params)
-      .filter(key => params[key] !== null && params[key] !== undefined && params[key] !== '')
-      .sort()
-      .reduce((result: Record<string, any>, key) => {
-        result[key] = params[key];
-        return result;
-      }, {});
-
-    // 构建查询字符串
-    return Object.keys(filteredParams)
-      .map(key => `${key}=${filteredParams[key]}`)
-      .join('&');
-  }
-}
+// @ts-ignore
+import * as AlipaySdk from 'https://esm.sh/@alipay/easysdk@2.2.0'; // Import Alipay Easy SDK
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -143,9 +36,6 @@ serve(async (req) => {
     const {
       out_trade_no,
       trade_status,
-      total_amount,
-      trade_no,
-      gmt_payment,
       sign,
       sign_type
     } = notifyData;
@@ -166,18 +56,22 @@ serve(async (req) => {
       throw new Error('支付配置未找到');
     }
 
-    // 验证签名
-    const signParams = { ...notifyData };
-    delete signParams.sign;
-    delete signParams.sign_type;
-
-    const signString = AlipayRSAUtils.buildSignString(signParams);
-    console.log('验证签名字符串:', signString);
+    // Configure Alipay Easy SDK for verification
+    AlipaySdk.config({
+      appId: config.alipay_app_id, // App ID is needed for some internal checks by SDK
+      privateKey: `-----BEGIN PRIVATE KEY-----\n${config.alipay_private_key}\n-----END PRIVATE KEY-----`, // Private key is not strictly needed for verifyNotify, but good to have consistent config
+      alipayPublicKey: `-----BEGIN PUBLIC KEY-----\n${config.alipay_public_key}\n-----END PUBLIC KEY-----`,
+      gateway: config.alipay_gateway_url,
+      // For cert mode, you would use:
+      // appCertPath: '/path/to/your/appCert.crt',
+      // alipayPublicCertPath: '/path/to/your/alipayCert.crt',
+      // alipayRootCertPath: '/path/to/your/alipayRootCert.crt',
+    });
 
     let isSignatureValid = false;
     try {
-      const publicKey = await AlipayRSAUtils.importPublicKey(config.alipay_public_key);
-      isSignatureValid = await AlipayRSAUtils.verifyRSA2(signString, sign, publicKey);
+      // Use Easy SDK to verify the notification signature
+      isSignatureValid = AlipaySdk.Payment.Common().verifyNotify(notifyData);
       console.log('签名验证结果:', isSignatureValid);
     } catch (error) {
       console.error('签名验证失败:', error);
@@ -209,7 +103,7 @@ serve(async (req) => {
         .from('orders')
         .update({
           status: 'paid',
-          payment_id: trade_no,
+          payment_id: notifyData.trade_no, // Use trade_no from notify data
           updated_at: new Date().toISOString()
         })
         .eq('id', orderData.id);
