@@ -104,21 +104,35 @@ const Payment = () => {
         console.error('Error invoking create-alipay-order:', invokeError);
         let userFacingMessage = "创建支付订单时发生未知错误。";
 
-        // Check if it's a FunctionsHttpError and try to parse its context
-        if (invokeError.name === 'FunctionsHttpError' && invokeError.context) {
-          try {
-            // The context might be the raw response body from the Edge Function
-            const errorDetails = JSON.parse(invokeError.context as string);
-            if (errorDetails.error) {
-              userFacingMessage = errorDetails.error;
-            } else {
-              userFacingMessage = `Edge Function 错误: ${invokeError.context}`;
+        // Check if it's a FunctionsHttpError and try to extract meaningful message
+        if (invokeError.name === 'FunctionsHttpError') {
+          let errorContent: string | undefined;
+          // Prioritize context as it often contains the raw response body from the Edge Function
+          if (invokeError.context && typeof invokeError.context === 'string') {
+            errorContent = invokeError.context;
+          } else if (invokeError.message && typeof invokeError.message === 'string') {
+            // Fallback to message if context is not useful or not a string
+            errorContent = invokeError.message;
+          }
+
+          if (errorContent && errorContent.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(errorContent);
+              // Look for 'error' or 'message' fields in the parsed JSON
+              userFacingMessage = parsed.error || parsed.message || userFacingMessage;
+            } catch (parseError) {
+              // If parsing fails, use the raw content as message
+              userFacingMessage = `Edge Function 错误: ${errorContent}`;
             }
-          } catch (parseError) {
-            // If context is not valid JSON, use it as is
-            userFacingMessage = `Edge Function 错误: ${invokeError.context}`;
+          } else if (errorContent) {
+            // If not JSON, use the content directly
+            userFacingMessage = `Edge Function 错误: ${errorContent}`;
+          } else {
+            // Fallback if no useful content in context or message
+            userFacingMessage = invokeError.message || userFacingMessage;
           }
         } else {
+          // For other types of errors (e.g., network errors before reaching Edge Function)
           userFacingMessage = invokeError.message || userFacingMessage;
         }
 
