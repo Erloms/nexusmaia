@@ -13,6 +13,8 @@ import PaymentConfig from '@/components/PaymentConfig';
 import AdminUserManagement from '@/components/AdminUserManagement'; // Import AdminUserManagement
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
+import { useAuth } from '@/contexts/AuthContext'; // Import useAuth
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 
 // Define types for data fetched from Supabase
 type UserProfile = Database['public']['Tables']['profiles']['Row'];
@@ -20,6 +22,8 @@ type Order = Database['public']['Tables']['orders']['Row']; // Use 'Order' type 
 
 const Admin = () => {
   const { toast } = useToast();
+  const { userProfile, loading: authLoading } = useAuth(); // Get userProfile and authLoading
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]); // State for users from DB
   const [paymentOrders, setPaymentOrders] = useState<Order[]>([]); // State for orders from DB
   const [searchTerm, setSearchTerm] = useState(''); // Keep for user search within AdminUserManagement
@@ -30,36 +34,51 @@ const Admin = () => {
   const [activationPlan, setActivationPlan] = useState<'annual' | 'lifetime' | 'agent'>('annual'); // Added agent plan
   
   useEffect(() => {
-    // Fetch users from Supabase
-    const fetchUsers = async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*');
-      if (error) {
-        console.error('Error fetching users for Admin:', error);
-        toast({ title: "加载用户失败", description: "无法获取用户列表", variant: "destructive" });
-      } else {
-        setUsers(data);
+    if (!authLoading) {
+      if (!userProfile || userProfile.role !== 'admin') {
+        toast({
+          title: "权限不足",
+          description: "您没有访问管理员页面的权限。",
+          variant: "destructive"
+        });
+        navigate('/dashboard'); // Redirect non-admin users
       }
-    };
+    }
+  }, [userProfile, authLoading, navigate, toast]);
 
-    // Fetch payment orders from Supabase
-    const fetchPaymentOrders = async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false }); // Order by latest
-      if (error) {
-        console.error('Error fetching payment orders for Admin:', error);
-        toast({ title: "加载订单失败", description: "无法获取支付订单列表", variant: "destructive" });
-      } else {
-        setPaymentOrders(data);
-      }
-    };
+  useEffect(() => {
+    if (userProfile?.role === 'admin') { // Only fetch if user is admin
+      // Fetch users from Supabase
+      const fetchUsers = async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*');
+        if (error) {
+          console.error('Error fetching users for Admin:', error);
+          toast({ title: "加载用户失败", description: "无法获取用户列表", variant: "destructive" });
+        } else {
+          setUsers(data);
+        }
+      };
 
-    fetchUsers();
-    fetchPaymentOrders();
-  }, []); // Run once on mount
+      // Fetch payment orders from Supabase
+      const fetchPaymentOrders = async () => {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false }); // Order by latest
+        if (error) {
+          console.error('Error fetching payment orders for Admin:', error);
+          toast({ title: "加载订单失败", description: "无法获取支付订单列表", variant: "destructive" });
+        } else {
+          setPaymentOrders(data);
+        }
+      };
+
+      fetchUsers();
+      fetchPaymentOrders();
+    }
+  }, [userProfile]); // Re-run when userProfile changes (e.g., after login)
 
   const handleManualActivation = async () => {
     if (!activationIdentifier) {
@@ -224,6 +243,14 @@ const Admin = () => {
     pendingPayments: paymentOrders.filter(o => o.status === 'pending').length,
     totalRevenue: paymentOrders.filter(o => o.status === 'completed').reduce((sum, o) => sum + parseFloat(o.amount as any), 0) // Ensure amount is number
   };
+
+  if (authLoading || !userProfile || userProfile.role !== 'admin') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#151A25] via-[#181f33] to-[#10141e] flex items-center justify-center">
+        <div className="text-white">加载中...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#151A25] via-[#181f33] to-[#10141e]">
