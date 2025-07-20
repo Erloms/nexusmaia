@@ -2,12 +2,119 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
 // @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.9'
-// @ts-ignore
-import * as AlipaySdk from 'https://esm.sh/@alipay/easysdk@2.2.0'; // Import Alipay Easy SDK
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// RSA2 签名和验签工具函数 (内联)
+class AlipayRSAUtils {
+  
+  // 将 PEM 格式的私钥转换为 CryptoKey
+  static async importPrivateKey(pemKey: string): Promise<CryptoKey> {
+    // 清理 PEM 格式
+    const pemHeader = "-----BEGIN PRIVATE KEY-----";
+    const pemFooter = "-----END PRIVATE KEY-----";
+    const pemContents = pemKey
+      .replace(pemHeader, "")
+      .replace(pemFooter, "")
+      .replace(/\s/g, "");
+    
+    // Base64 解码
+    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+    
+    // 导入私钥
+    return await crypto.subtle.importKey(
+      "pkcs8",
+      binaryDer,
+      {
+        name: "RSASSA-PKCS1-v1_5",
+        hash: "SHA-256",
+      },
+      false,
+      ["sign"]
+    );
+  }
+
+  // 将 PEM 格式的公钥转换为 CryptoKey
+  static async importPublicKey(pemKey: string): Promise<CryptoKey> {
+    // 清理 PEM 格式
+    const pemHeader = "-----BEGIN PUBLIC KEY-----";
+    const pemFooter = "-----END PUBLIC KEY-----";
+    const pemContents = pemKey
+      .replace(pemHeader, "")
+      .replace(pemFooter, "")
+      .replace(/\s/g, "");
+    
+    // Base64 解码
+    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+    
+    // 导入公钥
+    return await crypto.subtle.importKey(
+      "spki",
+      binaryDer,
+      {
+        name: "RSASSA-PKCS1-v1_5",
+        hash: "SHA-256",
+      },
+      false,
+      ["verify"]
+    );
+  }
+
+  // 对字符串进行 RSA2 签名
+  static async signRSA2(data: string, privateKey: CryptoKey): Promise<string> {
+    const encoder = new TextEncoder();
+    const dataBuffer = encoder.encode(data);
+    
+    const signature = await crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      privateKey,
+      dataBuffer
+    );
+
+    // 将签名转换为 Base64
+    return btoa(String.fromCharCode(...new Uint8Array(signature)));
+  }
+
+  // 验证 RSA2 签名
+  static async verifyRSA2(data: string, signature: string, publicKey: CryptoKey): Promise<boolean> {
+    try {
+      const encoder = new TextEncoder();
+      const dataBuffer = encoder.encode(data);
+      
+      // Base64 解码签名
+      const signatureBuffer = Uint8Array.from(atob(signature), c => c.charCodeAt(0));
+      
+      return await crypto.subtle.verify(
+        "RSASSA-PKCS1-v1_5",
+        publicKey,
+        signatureBuffer,
+        dataBuffer
+      );
+    } catch (error) {
+      console.error('签名验证失败:', error);
+      return false;
+    }
+  }
+
+  // 构建支付宝签名字符串
+  static buildSignString(params: Record<string, any>): string {
+    // 过滤空值并排序
+    const filteredParams = Object.keys(params)
+      .filter(key => params[key] !== null && params[key] !== undefined && params[key] !== '')
+      .sort()
+      .reduce((result: Record<string, any>, key) => {
+        result[key] = params[key];
+        return result;
+      }, {});
+
+    // 构建查询字符串
+    return Object.keys(filteredParams)
+      .map(key => `${key}=${filteredParams[key]}`)
+      .join('&');
+  }
 }
 
 interface CreateOrderRequest {
@@ -106,7 +213,7 @@ serve(async (req) => {
       );
     }
 
-    // **修正逻辑：根据 is_sandbox 强制设置正确的网关地址**
+    // 根据 is_sandbox 强制设置正确的网关地址
     let alipayGatewayUrl = config.alipay_gateway_url;
     if (config.is_sandbox) {
       alipayGatewayUrl = 'https://openapi.alipaydev.com/gateway.do';
@@ -139,57 +246,88 @@ serve(async (req) => {
     }
     console.log('Order created in Supabase:', orderData);
 
-    // Configure Alipay Easy SDK
-    AlipaySdk.config({
-      appId: config.alipay_app_id,
-      privateKey: `-----BEGIN PRIVATE KEY-----\n${config.alipay_private_key}\n-----END PRIVATE KEY-----`,
-      alipayPublicKey: `-----BEGIN PUBLIC KEY-----\n${config.alipay_public_key}\n-----END PUBLIC KEY-----`,
-      gateway: alipayGatewayUrl,
-      // Optional:
-      appCertPath: '', // Not needed for direct key usage
-      alipayCertPath: '', // Not needed for direct key usage
-      rootCertPath: '', // Not needed for direct key usage
-      encryptKey: '', // Not used for this API
-      signType: 'RSA2',
-      // For cert mode, you would use:
-      // appCertPath: '/path/to/your/appCert.crt',
-      // alipayPublicCertPath: '/path/to/your/alipayCert.crt',
-      // alipayRootCertPath: '/path/to/your/alipayRootCert.crt',
+    // Manually construct and sign the Alipay request for alipay.trade.precreate
+    const commonParams = {
+      app_id: config.alipay_app_id,
+      method: 'alipay.trade.precreate',
+      format: 'JSON',
+      charset: 'utf-8',
+      sign_type: 'RSA2',
+      timestamp: new Date().toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(/\//g, '-'),
+      version: '1.0',
+      notify_url: config.notify_url,
+    };
+
+    const bizContent = {
+      out_trade_no: orderNumber,
+      total_amount: total_amount.toFixed(2),
+      subject: subject,
+      // seller_id: '2088xxxx', // Optional: If you have a specific seller ID
+      // store_id: 'xxxx', // Optional: If you have a store ID
+    };
+
+    const allParams = { ...commonParams, biz_content: JSON.stringify(bizContent) };
+    const signString = AlipayRSAUtils.buildSignString(allParams);
+    
+    const privateKey = await AlipayRSAUtils.importPrivateKey(config.alipay_private_key);
+    const signature = await AlipayRSAUtils.signRSA2(signString, privateKey);
+
+    const requestParams = new URLSearchParams();
+    for (const key in allParams) {
+      requestParams.append(key, allParams[key]);
+    }
+    requestParams.append('sign', signature);
+
+    console.log('Sending request to Alipay gateway:', alipayGatewayUrl);
+    const alipayResponse = await fetch(alipayGatewayUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: requestParams.toString(),
     });
+
+    const alipayResultText = await alipayResponse.text();
+    console.log('Alipay raw response:', alipayResultText);
 
     let alipayResult;
     try {
-      // Use Easy SDK to precreate the order
-      alipayResult = await AlipaySdk.Payment.FaceToFace().precreate(
-        subject,
-        orderNumber,
-        total_amount.toFixed(2)
-      );
-      console.log('Alipay Easy SDK precreate result:', alipayResult);
-    } catch (sdkError: any) {
-      console.error('Alipay Easy SDK precreate failed:', sdkError);
-      // SDK errors might be complex objects, try to extract a message
-      const errorMessage = sdkError.message || sdkError.subMsg || sdkError.msg || JSON.stringify(sdkError);
-      throw new Error(`支付宝SDK调用失败: ${errorMessage}. 请检查您的支付宝配置（如App ID、密钥、网关地址）是否正确。`);
+      alipayResult = JSON.parse(alipayResultText);
+    } catch (parseError) {
+      console.error('Failed to parse Alipay response as JSON:', parseError);
+      throw new Error(`支付宝响应解析失败: ${alipayResultText}`);
     }
 
-    if (alipayResult.code !== '10000') {
-      console.error('Alipay returned an error code:', alipayResult.code, alipayResult.msg, alipayResult.subMsg);
-      throw new Error(`支付宝业务错误: ${alipayResult.msg || alipayResult.subMsg}`);
+    const precreateResponse = alipayResult.alipay_trade_precreate_response;
+    const alipaySign = alipayResult.sign;
+
+    if (!precreateResponse || precreateResponse.code !== '10000') {
+      console.error('Alipay precreate failed:', precreateResponse);
+      throw new Error(`支付宝业务错误: ${precreateResponse?.msg || precreateResponse?.sub_msg || '未知错误'}`);
+    }
+
+    // Verify Alipay's signature on its response (optional but recommended)
+    const alipayPublicKey = await AlipayRSAUtils.importPublicKey(config.alipay_public_key);
+    const isAlipaySignatureValid = await AlipayRSAUtils.verifyRSA2(JSON.stringify(precreateResponse), alipaySign, alipayPublicKey);
+    
+    if (!isAlipaySignatureValid) {
+      console.warn('Alipay response signature verification failed!');
+      // Depending on your security requirements, you might throw an error here.
+      // For now, we'll log a warning and proceed.
     }
 
     await supabaseClient
       .from('orders')
-      .update({ payment_id: alipayResult.outTradeNo }) // Use outTradeNo from result, which should match orderNumber
+      .update({ payment_id: precreateResponse.out_trade_no }) // Use outTradeNo from result, which should match orderNumber
       .eq('id', orderData.id);
-    console.log('Order updated with payment_id:', alipayResult.outTradeNo);
+    console.log('Order updated with payment_id:', precreateResponse.out_trade_no);
 
     return new Response(
       JSON.stringify({
         success: true,
-        qr_code_url: alipayResult.qrCode, // Easy SDK returns qrCode
+        qr_code_url: precreateResponse.qr_code, // Alipay returns qr_code
         order_number: orderNumber,
-        out_trade_no: alipayResult.outTradeNo
+        out_trade_no: precreateResponse.out_trade_no
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
