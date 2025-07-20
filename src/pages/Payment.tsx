@@ -96,30 +96,41 @@ const Payment = () => {
       console.log('Sending request body to create-alipay-order:', requestBody); // Log 4
 
       // Call the new Edge Function to create an Alipay order
-      const { data, error } = await supabase.functions.invoke('create-alipay-order', {
-        body: requestBody // Use the defined requestBody
+      const { data, error: invokeError } = await supabase.functions.invoke('create-alipay-order', {
+        body: requestBody
       });
 
-      if (error) {
-        console.error('Error creating Alipay order:', error); // Log 5
-        // Attempt to parse the error message from the backend
-        let errorMessage = error.message || "创建支付订单时发生错误";
-        try {
-          const errorJson = JSON.parse(errorMessage);
-          if (errorJson.error) {
-            errorMessage = errorJson.error;
+      if (invokeError) {
+        console.error('Error invoking create-alipay-order:', invokeError);
+        let userFacingMessage = "创建支付订单时发生未知错误。";
+
+        // Check if it's a FunctionsHttpError and try to parse its context
+        if (invokeError.name === 'FunctionsHttpError' && invokeError.context) {
+          try {
+            // The context might be the raw response body from the Edge Function
+            const errorDetails = JSON.parse(invokeError.context as string);
+            if (errorDetails.error) {
+              userFacingMessage = errorDetails.error;
+            } else {
+              userFacingMessage = `Edge Function 错误: ${invokeError.context}`;
+            }
+          } catch (parseError) {
+            // If context is not valid JSON, use it as is
+            userFacingMessage = `Edge Function 错误: ${invokeError.context}`;
           }
-        } catch (parseError) {
-          // Not a JSON error, use original message
+        } else {
+          userFacingMessage = invokeError.message || userFacingMessage;
         }
+
         toast({
           title: "支付失败",
-          description: errorMessage,
+          description: userFacingMessage,
           variant: "destructive"
         });
-        throw error; // Re-throw to ensure finally block runs
+        return; // Stop execution here
       }
 
+      // If no invokeError, then data should be valid
       setQrCodeUrl(data.qr_code_url);
       setShowPayment(true);
       toast({
@@ -129,8 +140,12 @@ const Payment = () => {
       console.log('Alipay order created successfully, QR code URL:', data.qr_code_url); // Log 6
 
     } catch (error: any) {
-      // Error already handled by toast above, just ensure loading state is reset
-      console.error('Caught error in handlePurchase:', error); // Log 7
+      console.error('Caught unexpected error in handlePurchase:', error); // Log 7
+      toast({
+        title: "支付失败",
+        description: error.message || "发生未知错误，请稍后再试。",
+        variant: "destructive"
+      });
     } finally {
       setPaymentLoading(false);
       console.log('handlePurchase finished, paymentLoading set to false.'); // Log 8
