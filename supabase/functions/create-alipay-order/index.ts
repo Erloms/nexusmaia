@@ -13,52 +13,72 @@ class AlipayRSAUtils {
   
   // 将 PEM 格式的私钥转换为 CryptoKey
   static async importPrivateKey(pemKey: string): Promise<CryptoKey> {
-    // 清理 PEM 格式
+    // 清理 PEM 格式，确保是 PKCS8 格式的纯 Base64 内容
     const pemHeader = "-----BEGIN PRIVATE KEY-----";
     const pemFooter = "-----END PRIVATE KEY-----";
-    const pemContents = pemKey
+    const pkcs8PemHeader = "-----BEGIN PKCS8 PRIVATE KEY-----";
+    const pkcs8PemFooter = "-----END PKCS8 PRIVATE KEY-----";
+
+    let cleanedKey = pemKey
       .replace(pemHeader, "")
       .replace(pemFooter, "")
-      .replace(/\s/g, "");
-    
-    // Base64 解码
-    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+      .replace(pkcs8PemHeader, "")
+      .replace(pkcs8PemFooter, "")
+      .replace(/\s/g, ""); // Remove all whitespace
+
+    // 尝试 Base64 解码
+    let binaryDer;
+    try {
+      binaryDer = Uint8Array.from(atob(cleanedKey), c => c.charCodeAt(0));
+    } catch (e) {
+      throw new Error(`Failed to base64 decode private key: ${e.message}`);
+    }
     
     // 导入私钥
     return await crypto.subtle.importKey(
-      "pkcs8",
+      "pkcs8", // 明确指定 PKCS8 格式
       binaryDer,
       {
         name: "RSASSA-PKCS1-v1_5",
         hash: "SHA-256",
       },
-      false,
+      true, // extractable: true for debugging, set to false in production
       ["sign"]
     );
   }
 
   // 将 PEM 格式的公钥转换为 CryptoKey
   static async importPublicKey(pemKey: string): Promise<CryptoKey> {
-    // 清理 PEM 格式
+    // 清理 PEM 格式，确保是 SPKI 格式的纯 Base64 内容
     const pemHeader = "-----BEGIN PUBLIC KEY-----";
     const pemFooter = "-----END PUBLIC KEY-----";
-    const pemContents = pemKey
+    const spkiPemHeader = "-----BEGIN RSA PUBLIC KEY-----"; // Common for SPKI
+    const spkiPemFooter = "-----END RSA PUBLIC KEY-----"; // Common for SPKI
+
+    let cleanedKey = pemKey
       .replace(pemHeader, "")
       .replace(pemFooter, "")
-      .replace(/\s/g, "");
-    
-    // Base64 解码
-    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+      .replace(spkiPemHeader, "")
+      .replace(spkiPemFooter, "")
+      .replace(/\s/g, ""); // Remove all whitespace
+
+    // 尝试 Base64 解码
+    let binaryDer;
+    try {
+      binaryDer = Uint8Array.from(atob(cleanedKey), c => c.charCodeAt(0));
+    } catch (e) {
+      throw new Error(`Failed to base64 decode public key: ${e.message}`);
+    }
     
     // 导入公钥
     return await crypto.subtle.importKey(
-      "spki",
+      "spki", // 明确指定 SPKI 格式
       binaryDer,
       {
         name: "RSASSA-PKCS1-v1_5",
         hash: "SHA-256",
       },
-      false,
+      true, // extractable: true for debugging, set to false in production
       ["verify"]
     );
   }
@@ -112,7 +132,13 @@ class AlipayRSAUtils {
 
     // 构建查询字符串
     return Object.keys(filteredParams)
-      .map(key => `${key}=${filteredParams[key]}`)
+      .map(key => {
+        // biz_content 需要特殊处理，其值本身是 JSON 字符串，不应再被 URL 编码
+        if (key === 'biz_content') {
+          return `${key}=${filteredParams[key]}`;
+        }
+        return `${key}=${encodeURIComponent(filteredParams[key])}`; // 对其他参数值进行 URL 编码
+      })
       .join('&');
   }
 }
@@ -262,15 +288,16 @@ serve(async (req) => {
       out_trade_no: orderNumber,
       total_amount: total_amount.toFixed(2),
       subject: subject,
-      // seller_id: '2088xxxx', // Optional: If you have a specific seller ID
-      // store_id: 'xxxx', // Optional: If you have a store ID
+      product_code: 'FACE_TO_FACE_PAYMENT', // Changed to FACE_TO_FACE_PAYMENT for precreate
     };
 
     const allParams = { ...commonParams, biz_content: JSON.stringify(bizContent) };
     const signString = AlipayRSAUtils.buildSignString(allParams);
+    console.log('Signing string:', signString); // Log the string being signed
     
     const privateKey = await AlipayRSAUtils.importPrivateKey(config.alipay_private_key);
     const signature = await AlipayRSAUtils.signRSA2(signString, privateKey);
+    console.log('Generated signature:', signature); // Log the generated signature
 
     const requestParams = new URLSearchParams();
     for (const key in allParams) {
@@ -307,8 +334,11 @@ serve(async (req) => {
     }
 
     // Verify Alipay's signature on its response (optional but recommended)
+    // Note: The response string to be verified should exclude the sign and sign_type fields.
+    // It should be the JSON string of the response object itself.
+    const responseToVerify = JSON.stringify(precreateResponse);
     const alipayPublicKey = await AlipayRSAUtils.importPublicKey(config.alipay_public_key);
-    const isAlipaySignatureValid = await AlipayRSAUtils.verifyRSA2(JSON.stringify(precreateResponse), alipaySign, alipayPublicKey);
+    const isAlipaySignatureValid = await AlipayRSAUtils.verifyRSA2(responseToVerify, alipaySign, alipayPublicKey);
     
     if (!isAlipaySignatureValid) {
       console.warn('Alipay response signature verification failed!');

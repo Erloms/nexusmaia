@@ -13,52 +13,72 @@ class AlipayRSAUtils {
   
   // 将 PEM 格式的私钥转换为 CryptoKey
   static async importPrivateKey(pemKey: string): Promise<CryptoKey> {
-    // 清理 PEM 格式
+    // 清理 PEM 格式，确保是 PKCS8 格式的纯 Base64 内容
     const pemHeader = "-----BEGIN PRIVATE KEY-----";
     const pemFooter = "-----END PRIVATE KEY-----";
-    const pemContents = pemKey
+    const pkcs8PemHeader = "-----BEGIN PKCS8 PRIVATE KEY-----";
+    const pkcs8PemFooter = "-----END PKCS8 PRIVATE KEY-----";
+
+    let cleanedKey = pemKey
       .replace(pemHeader, "")
       .replace(pemFooter, "")
-      .replace(/\s/g, "");
-    
-    // Base64 解码
-    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+      .replace(pkcs8PemHeader, "")
+      .replace(pkcs8PemFooter, "")
+      .replace(/\s/g, ""); // Remove all whitespace
+
+    // 尝试 Base64 解码
+    let binaryDer;
+    try {
+      binaryDer = Uint8Array.from(atob(cleanedKey), c => c.charCodeAt(0));
+    } catch (e) {
+      throw new Error(`Failed to base64 decode private key: ${e.message}`);
+    }
     
     // 导入私钥
     return await crypto.subtle.importKey(
-      "pkcs8",
+      "pkcs8", // 明确指定 PKCS8 格式
       binaryDer,
       {
         name: "RSASSA-PKCS1-v1_5",
         hash: "SHA-256",
       },
-      false,
+      true, // extractable: true for debugging, set to false in production
       ["sign"]
     );
   }
 
   // 将 PEM 格式的公钥转换为 CryptoKey
   static async importPublicKey(pemKey: string): Promise<CryptoKey> {
-    // 清理 PEM 格式
+    // 清理 PEM 格式，确保是 SPKI 格式的纯 Base64 内容
     const pemHeader = "-----BEGIN PUBLIC KEY-----";
     const pemFooter = "-----END PUBLIC KEY-----";
-    const pemContents = pemKey
+    const spkiPemHeader = "-----BEGIN RSA PUBLIC KEY-----"; // Common for SPKI
+    const spkiPemFooter = "-----END RSA PUBLIC KEY-----"; // Common for SPKI
+
+    let cleanedKey = pemKey
       .replace(pemHeader, "")
       .replace(pemFooter, "")
-      .replace(/\s/g, "");
-    
-    // Base64 解码
-    const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+      .replace(spkiPemHeader, "")
+      .replace(spkiPemFooter, "")
+      .replace(/\s/g, ""); // Remove all whitespace
+
+    // 尝试 Base64 解码
+    let binaryDer;
+    try {
+      binaryDer = Uint8Array.from(atob(cleanedKey), c => c.charCodeAt(0));
+    } catch (e) {
+      throw new Error(`Failed to base64 decode public key: ${e.message}`);
+    }
     
     // 导入公钥
     return await crypto.subtle.importKey(
-      "spki",
+      "spki", // 明确指定 SPKI 格式
       binaryDer,
       {
         name: "RSASSA-PKCS1-v1_5",
         hash: "SHA-256",
       },
-      false,
+      true, // extractable: true for debugging, set to false in production
       ["verify"]
     );
   }
@@ -103,7 +123,7 @@ class AlipayRSAUtils {
   static buildSignString(params: Record<string, any>): string {
     // 过滤空值并排序
     const filteredParams = Object.keys(params)
-      .filter(key => params[key] !== null && params[key] !== undefined && params[key] !== '')
+      .filter(key => params[key] !== null && params[key] !== undefined && params[key] !== '' && key !== 'sign' && key !== 'sign_type') // 过滤掉 sign 和 sign_type
       .sort()
       .reduce((result: Record<string, any>, key) => {
         result[key] = params[key];
@@ -112,7 +132,7 @@ class AlipayRSAUtils {
 
     // 构建查询字符串
     return Object.keys(filteredParams)
-      .map(key => `${key}=${filteredParams[key]}`)
+      .map(key => `${key}=${filteredParams[key]}`) // 异步通知的参数值不需要 URL 编码
       .join('&');
   }
 }
@@ -147,7 +167,7 @@ serve(async (req) => {
       trade_no,
       gmt_payment,
       sign,
-      sign_type
+      sign_type // This is also part of the notifyData, but should be excluded from sign string
     } = notifyData;
 
     if (!out_trade_no || !trade_status || !sign) {
@@ -167,11 +187,8 @@ serve(async (req) => {
     }
 
     // 验证签名
-    const signParams = { ...notifyData };
-    delete signParams.sign;
-    delete signParams.sign_type;
-
-    const signString = AlipayRSAUtils.buildSignString(signParams);
+    // 异步通知的验签，需要将原始的 notifyData 传入 buildSignString，但要排除 sign 和 sign_type
+    const signString = AlipayRSAUtils.buildSignString(notifyData);
     console.log('验证签名字符串:', signString);
 
     let isSignatureValid = false;
