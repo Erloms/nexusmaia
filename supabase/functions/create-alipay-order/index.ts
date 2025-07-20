@@ -1,4 +1,3 @@
-/// <reference lib="deno.ns" />
 // @ts-ignore
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
 // @ts-ignore
@@ -305,7 +304,7 @@ serve(async (req) => {
     if (!alipayResponse.ok) {
       const errorText = await alipayResponse.text();
       console.error('Alipay API request failed:', alipayResponse.status, errorText);
-      throw new Error(`支付宝API请求失败: ${alipayResponse.status} - ${errorText}`);
+      throw new Error(`支付宝API请求失败: ${alipayResponse.status} - ${errorText}. 请检查您的支付宝配置（如App ID、密钥、回调地址）是否正确，或稍后重试。`);
     }
 
     const responseText = await alipayResponse.text();
@@ -346,14 +345,27 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Caught error in create-alipay-order Edge Function:', error);
+    let userErrorMessage = '创建订单失败';
+    if (error instanceof Error) {
+      userErrorMessage = error.message;
+      if (userErrorMessage.includes('error sending request for url')) {
+        userErrorMessage = `网络请求支付宝网关失败。这可能是由于网络不稳定、DNS解析问题或支付宝沙箱环境暂时不可用。请检查您的网络连接，并确保支付宝配置（特别是网关地址）正确无误，然后稍后重试。原始错误: ${userErrorMessage}`;
+      } else if (userErrorMessage.includes('私钥导入失败') || userErrorMessage.includes('签名生成失败')) {
+        userErrorMessage = `密钥配置错误：${userErrorMessage}。请检查您的应用私钥和支付宝公钥是否正确且格式为纯Base64。`;
+      } else if (userErrorMessage.includes('支付宝API请求失败')) {
+        userErrorMessage = `支付宝API请求返回非成功状态：${userErrorMessage}。请检查您的支付宝配置（如App ID、密钥、回调地址）是否正确，或稍后重试。`;
+      } else if (userErrorMessage.includes('支付宝错误')) {
+        userErrorMessage = `支付宝API返回业务错误：${userErrorMessage}。请检查您的支付宝应用配置是否与支付宝开放平台一致。`;
+      }
+    }
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error instanceof Error ? error.message : '创建订单失败' 
+      JSON.stringify({
+        success: false,
+        error: userErrorMessage
       }),
-      { 
+      {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }
